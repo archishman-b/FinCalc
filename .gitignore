@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+# build output (GitHub Pages serves from /docs, which IS committed)
+apps/web/dist/
+packages/*/dist/
+# tooling
+.vite/
+*.tsbuildinfo
+coverage/
+.turbo/
+# local env / editor / OS
+.env
+.env.*
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+npm-debug.log*
