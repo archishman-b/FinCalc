@@ -1,0 +1,17 @@
+{
+  "name": "@fincalc/ui",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Shared presentational primitives and formatters (Indian number formatting, compact lakh/crore).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "sideEffects": false,
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

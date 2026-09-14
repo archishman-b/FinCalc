@@ -1,0 +1,17 @@
+{
+  "name": "@fincalc/data",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Versioned rule packs (tax slabs, stamp duty, product limits) keyed by financial year, each entry with source and verifiedOn.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}

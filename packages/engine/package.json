@@ -1,0 +1,14 @@
+{
+  "name": "@fincalc/engine",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Pure TypeScript financial engine: zero DOM, zero React, zero I/O.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "sideEffects": false
+}

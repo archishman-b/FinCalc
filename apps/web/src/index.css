@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/*
+  Phase 0 base only. The visual system (palette, type roles, layout) is decided
+  by the design plan in Phase 5, before any real UI is written.
+*/
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    font-feature-settings: "tnum" 1, "lnum" 1; /* tabular, lining figures: numbers are the hero */
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
