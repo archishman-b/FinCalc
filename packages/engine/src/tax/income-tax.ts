@@ -329,3 +329,59 @@ export function computeIncomeTax(input: IncomeTaxInput, rules: IncomeTaxRules): 
     totalTaxPayable,
   };
 }
+
+/**
+ * The inverse of {@link computeIncomeTax} along one axis: given every
+ * other input held fixed, what gross salary produces a stated net
+ * (take-home) annual income? Solved by bisection rather than algebraically
+ * — slabs, the rebate cliff/taper, surcharge marginal relief and cess
+ * compose into a function with no closed-form inverse, but `grossSalary −
+ * totalTaxPayable` is monotonically non-decreasing in `grossSalary` (raising
+ * gross income never reduces take-home, since no marginal rate this engine
+ * computes reaches 100%), so bisection is reliable.
+ *
+ * Exists because most households know their take-home pay, not their CTC
+ * breakdown — Layer 1 of the web app asks for monthly take-home and needs
+ * a `grossSalaryAnnual` figure to hand the Comparator's household tax
+ * config. Holds every `IncomeTaxInput` field other than `grossSalary`
+ * fixed at whatever the caller passes in `input` (typically all zero/
+ * undefined for a pure "what gross salary nets me ₹X" question).
+ */
+export function solveGrossSalaryForNetIncome(
+  targetNetAnnual: number,
+  input: Omit<IncomeTaxInput, 'grossSalary'>,
+  rules: IncomeTaxRules,
+  bounds: { lo?: number; hi?: number } = {},
+): number {
+  if (targetNetAnnual < 0) {
+    throw new RangeError(`solveGrossSalaryForNetIncome: targetNetAnnual must be non-negative, got ${targetNetAnnual}`);
+  }
+  const netAt = (grossSalary: number): number => {
+    const result = computeIncomeTax({ ...input, grossSalary }, rules);
+    return grossSalary - result.totalTaxPayable;
+  };
+
+  let lo = bounds.lo ?? targetNetAnnual;
+  let hi = bounds.hi ?? Math.max(targetNetAnnual * 3, targetNetAnnual + 1_00_000);
+  // Tax is never negative, so net(gross) <= gross always — lo=targetNetAnnual is always a safe
+  // (net-too-low-or-equal) starting bracket. Expand hi until it definitely nets above the target.
+  let hiNet = netAt(hi);
+  let guard = 0;
+  while (hiNet < targetNetAnnual && guard < 20) {
+    hi *= 2;
+    hiNet = netAt(hi);
+    guard += 1;
+  }
+  if (hiNet < targetNetAnnual) {
+    throw new RangeError(`solveGrossSalaryForNetIncome: could not bracket a gross salary netting ${targetNetAnnual}`);
+  }
+
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    const midNet = netAt(mid);
+    if (Math.abs(midNet - targetNetAnnual) < 1) return round2(mid);
+    if (midNet < targetNetAnnual) lo = mid;
+    else hi = mid;
+  }
+  return round2((lo + hi) / 2);
+}

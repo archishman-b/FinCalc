@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
-import { amortize, emi, levelEmiSchedule } from './amortization';
+import { amortize, emi, levelEmiSchedule, principalForEmi } from './amortization';
 
 describe('emi', () => {
   it('matches a hand-checked bank EMI calculator (₹50,00,000 @ 8.5% for 240 months)', () => {
@@ -121,6 +121,48 @@ describe('amortize — property: principal components sum to the loan, to the ru
         },
       ),
       { numRuns: 300 },
+    );
+  });
+});
+
+describe('principalForEmi — inverse of emi', () => {
+  it('matches a hand-checked figure: ₹43,391.16/mo @ 8.5% for 240mo supports ~₹50,00,000', () => {
+    expect(principalForEmi(43_391.16, 0.085, 240)).toBeCloseTo(5_000_000, -1);
+  });
+
+  it('falls back to straight-line emi × tenure when the rate is zero', () => {
+    expect(principalForEmi(10_000, 0, 12)).toBeCloseTo(120_000, 8);
+  });
+
+  it('rejects a non-positive tenure', () => {
+    expect(() => principalForEmi(10_000, 0.08, 0)).toThrow(RangeError);
+  });
+
+  it('rejects a negative EMI', () => {
+    expect(() => principalForEmi(-1, 0.08, 12)).toThrow(RangeError);
+  });
+
+  it('round-trips with emi() across randomised realistic loans, at both zero and non-zero rates', () => {
+    fc.assert(
+      fc.property(
+        fc.double({ min: 50_000, max: 5_00_00_000, noNaN: true }),
+        // Excludes the (0, 0.001) sliver deliberately: a subnormal-adjacent
+        // rate like 1e-300 is not a real interest rate, and at that scale
+        // `(1+r)^n` rounds to exactly 1 in float64 — the same 0/0 that
+        // emi()'s own `r === 0` branch exists to dodge, just missed by an
+        // exactly-zero check when r is technically nonzero but far below
+        // float64 epsilon. A pre-existing Phase 1 edge case, not something
+        // this test exists to characterise.
+        fc.oneof(fc.constant(0), fc.double({ min: 0.001, max: 0.2, noNaN: true })),
+        fc.integer({ min: 1, max: 360 }),
+        (principal, rate, tenureMonths) => {
+          const instalment = emi(principal, rate, tenureMonths);
+          const recovered = principalForEmi(instalment, rate, tenureMonths);
+          // Tolerance scales with principal: paisa-level float rounding compounds over long, high-rate tenures the same way it does in amortize() itself.
+          expect(Math.abs(recovered - principal)).toBeLessThan(Math.max(2, principal * 0.0001));
+        },
+      ),
+      { numRuns: 2000 },
     );
   });
 });

@@ -7,6 +7,7 @@ import {
   rebate87A,
   resolveSlabs,
   slabTax,
+  solveGrossSalaryForNetIncome,
   surchargeWithMarginalRelief,
 } from './income-tax';
 
@@ -215,5 +216,30 @@ describe('computeIncomeTax — representative households', () => {
     expect(result.surchargeRate).toBeCloseTo(0.25, 4);
     expect(result.surchargeMarginalRelief).toBe(0);
     expect(result.totalTaxPayable).toBe(22_854_000);
+  });
+});
+
+describe('solveGrossSalaryForNetIncome', () => {
+  it('round-trips with computeIncomeTax: solving for the net income a known gross salary produces recovers that gross salary', () => {
+    for (const grossSalary of [600_000, 1_200_000, 2_500_000, 7_000_000, 20_000_000]) {
+      const net = grossSalary - computeIncomeTax({ regime: 'new', age: 'under60', grossSalary }, rules).totalTaxPayable;
+      const recovered = solveGrossSalaryForNetIncome(net, { regime: 'new', age: 'under60' }, rules);
+      expect(Math.abs(recovered - grossSalary)).toBeLessThan(50);
+    }
+  });
+
+  it('a target net income of 0 solves to a gross salary within a rupee of 0 (no tax, no income)', () => {
+    expect(solveGrossSalaryForNetIncome(0, { regime: 'new', age: 'under60' }, rules)).toBeLessThan(2);
+  });
+
+  it('rejects a negative target', () => {
+    expect(() => solveGrossSalaryForNetIncome(-1, { regime: 'new', age: 'under60' }, rules)).toThrow(RangeError);
+  });
+
+  it('works under the old regime too, where deductions change the relationship between gross and net', () => {
+    const grossSalary = 1_800_000;
+    const net = grossSalary - computeIncomeTax({ regime: 'old', age: 'under60', grossSalary }, rules).totalTaxPayable;
+    const recovered = solveGrossSalaryForNetIncome(net, { regime: 'old', age: 'under60' }, rules);
+    expect(Math.abs(recovered - grossSalary)).toBeLessThan(50);
   });
 });

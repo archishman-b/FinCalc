@@ -1,9 +1,68 @@
 @import "tailwindcss";
 
 /*
-  Phase 0 base only. The visual system (palette, type roles, layout) is decided
-  by the design plan in Phase 5, before any real UI is written.
-*/
+ * FinCalc design tokens — Phase 5 design plan (brief §5: "produce a short
+ * design plan ... before writing UI code, and check it against this
+ * brief").
+ *
+ * PALETTE — paper and ink, not fintech blue-slate. A warm off-white ground
+ * and a warm near-black ink instead of the cold pure-white/slate-900 pairing
+ * most finance sites use; one confident accent (rust) used only
+ * functionally — primary actions, the hero number, the flagship door —
+ * never as a decorative wash; moss for positive/growth signals; ochre for
+ * the Parity Auditor's warnings. Six named hex values, each with a
+ * dark-mode counterpart below.
+ *
+ * TYPE — three system-stack roles, zero external font requests. That's a
+ * deliberate reading of brief principle 6 ("privacy by architecture"): a
+ * font fetched from a type foundry's CDN is the one third-party request
+ * most sites this size make without thinking about it, and this one
+ * doesn't. A serif carries headlines and body copy for some warmth and
+ * "well-made instrument" character instead of the sans-everywhere look of
+ * most fintech/AI-generated sites; a tabular monospace carries the actual
+ * rupee figures, since brief §5 says numbers are the hero.
+ *
+ * SELF-CHECK against brief §5's anti-generic list: no all-caps eyebrow
+ * labels (none anywhere); no identical rounded cards (the entry router is
+ * an asymmetric numbered list — see routes/Home.tsx, not a card grid); no
+ * gradient washes (rust appears only on interactive/numeric elements).
+ */
+:root {
+  --paper: #faf7f2;
+  --ink: #1c1a17;
+  --ink-muted: #6b6459;
+  --rust: #b5482e;
+  --moss: #3f6b4f;
+  --ochre: #a67425;
+  --hairline: #e4ddd1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #17140f;
+    --ink: #f2ede4;
+    --ink-muted: #a89e8d;
+    --rust: #d6683f;
+    --moss: #5c9271;
+    --ochre: #d2a245;
+    --hairline: #332c22;
+  }
+}
+
+@theme {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-rust: var(--rust);
+  --color-moss: var(--moss);
+  --color-ochre: var(--ochre);
+  --color-hairline: var(--hairline);
+
+  --font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+}
+
 @layer base {
   :root {
     color-scheme: light dark;
@@ -11,6 +70,14 @@
   html {
     -webkit-text-size-adjust: 100%;
     font-feature-settings: "tnum" 1, "lnum" 1; /* tabular, lining figures: numbers are the hero */
+  }
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+  h1, h2, h3, .font-serif-heading {
+    font-family: var(--font-serif);
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {

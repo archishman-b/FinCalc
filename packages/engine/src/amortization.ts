@@ -63,6 +63,26 @@ export function emi(principal: number, annualRate: AnnualRate, tenureMonths: num
   return (principal * r * factor) / (factor - 1);
 }
 
+/**
+ * The inverse of {@link emi}: given a target monthly instalment, the
+ * principal a reducing-balance loan at this rate and tenure can support.
+ * Used wherever a household states an affordable monthly payment first and
+ * the loan size is the derived quantity — e.g. Layer 1's "given this
+ * housing budget, what property can it support" flow — rather than the
+ * more common direction of stating the principal and deriving the EMI.
+ * Falls back to the same straight-line P = EMI × n the zero-rate branch of
+ * `emi()` uses, so `principalForEmi(emi(P, r, n), r, n) === P` holds at
+ * both zero and non-zero rates (verified by property test).
+ */
+export function principalForEmi(emiAmount: number, annualRate: AnnualRate, tenureMonths: number): number {
+  if (tenureMonths <= 0) throw new RangeError(`principalForEmi: tenureMonths must be positive, got ${tenureMonths}`);
+  if (emiAmount < 0) throw new RangeError(`principalForEmi: emiAmount must be non-negative, got ${emiAmount}`);
+  const r = nominalMonthlyRate(annualRate);
+  if (r === 0) return emiAmount * tenureMonths;
+  const factor = Math.pow(1 + r, tenureMonths);
+  return (emiAmount * (factor - 1)) / (r * factor);
+}
+
 /** Runs a reducing-balance amortisation, month by month, against whatever rate, payment and prepayment schedule is supplied. */
 export function amortize(input: AmortizationInput): AmortizationRow[] {
   const { principal, annualRate, scheduledPayment, extraPrepayment, months } = input;

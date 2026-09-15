@@ -1,0 +1,260 @@
+/**
+ * Layer 1 of the Allocation Comparator (brief §4): turns the four inputs
+ * the brief specifies — city, household income, monthly housing budget,
+ * horizon — into a real two-scenario comparison run through the actual
+ * Phase 3/4 engine, with every default assumption a named, documented
+ * constant below rather than a magic number buried in the math.
+ *
+ * The two scenarios are deliberately the simplest honest pair that
+ * showcases what makes this engine different from a naive calculator:
+ *
+ *   Buy        — a home sized so its EMI (plus a maintenance/property-tax
+ *                allowance) fits the stated budget, self-occupied.
+ *   Rent & invest — rent an equivalent home at an assumed market yield;
+ *                the Comparator's own equal-outflow sweep (principle 1 &
+ *                10) invests whatever the budget doesn't go to rent — this
+ *                *is* "rent and invest the difference", computed by the
+ *                same mechanism the founding scenario uses, not a
+ *                hand-rolled SIP bolted on separately.
+ *
+ * Both scenarios share one sweep instrument at one rate (principle 9) —
+ * the exact asymmetry the brief's §1A canonical failure case (13.5% vs 6%)
+ * warns against never gets a chance to creep in here.
+ *
+ * City is fixed to Hyderabad for now: it's the only city
+ * @fincalc/data ships real stamp-duty rates for (see
+ * claude/decisions-and-workflow.md, "Maharashtra municipal_corporation
+ * ... deliberately unshipped"). Guessing a rate for an unlisted city would
+ * break the project's own "flag rather than guess" rule, so the field is
+ * real but single-valued until more cities' data ships.
+ */
+import {
+  getCostInflationIndexRules,
+  getIncomeTaxRules,
+  getStampDutyRules,
+  stampDutyAndRegistrationCost,
+} from '@fincalc/data';
+import {
+  compare,
+  ownedPropertyPosition,
+  principalForEmi,
+  rentalExpensePosition,
+  solveGrossSalaryForNetIncome,
+  solveHurdleRate,
+  type CompareOptions,
+  type ComparisonResult,
+  type HouseholdTaxConfig,
+  type MarketContext,
+  type Scenario,
+} from '@fincalc/engine';
+
+import { buildMarketContext, type AssumptionSeries } from './market-context';
+
+export const SUPPORTED_CITIES = [{ id: 'hyderabad', label: 'Hyderabad, Telangana' }] as const;
+export type CityId = (typeof SUPPORTED_CITIES)[number]['id'];
+
+export const HORIZON_OPTIONS = [5, 10, 15, 25] as const;
+export type HorizonYears = (typeof HORIZON_OPTIONS)[number];
+
+export interface LayerOneInputs {
+  city: CityId;
+  /** Monthly take-home (post-tax) household income, in rupees. */
+  monthlyHouseholdIncomeNet: number;
+  /** Monthly budget for housing — the equal-outflow target both scenarios are compared on. */
+  monthlyHousingBudget: number;
+  horizonYears: HorizonYears;
+}
+
+// ---- Documented default assumptions (brief principle 8: err conservative; principle 5: every one inspectable) ----
+
+const PROPERTY_APPRECIATION_SERIES = 'property.appreciation';
+/** Conservative long-run residential appreciation default — matches the rate used throughout Phase 4's own test scenarios. */
+const PROPERTY_APPRECIATION_RATE = 0.06;
+
+const SWEEP_SERIES = 'default.index_fund';
+/** The single shared reinvestment rate for both scenarios' surplus — see the module doc comment on why this must never differ between scenarios. */
+const SWEEP_RATE = 0.11;
+
+/** Typical current home-loan rate. An editable assumption, not a cited tax/stamp-duty figure — Layer 2 will expose this as a slider. */
+const HOME_LOAN_RATE = 0.085;
+/** 20-year tenure: the common default a household takes regardless of which horizon they're evaluating the decision at. */
+const HOME_LOAN_TENURE_MONTHS = 240;
+/** 80% loan-to-value, i.e. a 20% down payment — a conventional Indian home-loan default. */
+const LOAN_TO_VALUE = 0.8;
+/** Society maintenance + upkeep, as a fraction of the monthly housing budget reserved before sizing the EMI. Rough — Layer 2 will make this a direct input. */
+const MAINTENANCE_SHARE_OF_BUDGET = 0.02;
+/** Municipal property tax, annualised, as a fraction of the *annual* housing budget. Rough — same caveat as above. */
+const PROPERTY_TAX_SHARE_OF_ANNUAL_BUDGET = 0.01;
+/** Assumed gross residential rental yield for a home equivalent to what the Buy scenario buys — a common Indian-metro ballpark, not a cited figure (see HOME_LOAN_RATE's caveat). Sizes the Rent scenario's rent, not a tax/stamp-duty fact. */
+const ASSUMED_GROSS_RENTAL_YIELD = 0.03;
+const SECURITY_DEPOSIT_MONTHS = 3;
+
+const HORIZONS_MONTHS = [60, 120, 180, 300] as const;
+
+/** Household defaults, per the project's own established convention (decisions-and-workflow.md): the new regime is where the sharp edges live, and a 35-40-year-old household (the brief's own founding persona) is squarely working-age. Layer 2 will make both editable. */
+const HOUSEHOLD_REGIME = 'new' as const;
+const HOUSEHOLD_AGE = 'under60' as const;
+
+function currentFy(date: Date = new Date()): string {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 1; // 1-12
+  const startYear = month >= 4 ? year : year - 1;
+  return `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
+}
+
+export interface LayerOneResult {
+  result: ComparisonResult;
+  scenarios: readonly [buy: Scenario, rent: Scenario];
+  ctx: MarketContext;
+  household: HouseholdTaxConfig;
+  startFy: string;
+  horizonsMonths: readonly number[];
+  selectedHorizonMonths: number;
+  /** What the Buy scenario's home actually costs and how it was financed — shown in the assumptions strip. */
+  buy: { propertyPrice: number; loanPrincipal: number; entryCosts: number };
+  /** The market rent assumed for an equivalent home in the Rent scenario. */
+  rent: { assumedMonthlyRent: number; securityDeposit: number };
+  assumptions: readonly AssumptionSeries[];
+}
+
+export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult {
+  if (inputs.monthlyHouseholdIncomeNet <= 0) throw new RangeError('Household income must be positive.');
+  if (inputs.monthlyHousingBudget <= 0) throw new RangeError('Housing budget must be positive.');
+
+  const startFy = currentFy();
+  const incomeTaxRules = getIncomeTaxRules(startFy);
+  const cii = getCostInflationIndexRules();
+  const stampDutyRules = getStampDutyRules();
+
+  const hyderabadRates = stampDutyRules.states.TG?.byLocalBody.municipal_corporation;
+  if (!hyderabadRates) throw new Error('buildLayerOneComparison: Telangana municipal_corporation stamp-duty rates are not shipped.');
+
+  // --- Size the Buy scenario from the stated budget ---
+  const targetEmi = inputs.monthlyHousingBudget * (1 - MAINTENANCE_SHARE_OF_BUDGET);
+  const loanPrincipal = principalForEmi(targetEmi, HOME_LOAN_RATE, HOME_LOAN_TENURE_MONTHS);
+  const propertyPrice = loanPrincipal / LOAN_TO_VALUE;
+  const entryCosts = stampDutyAndRegistrationCost(propertyPrice, hyderabadRates);
+
+  const buyScenario: Scenario = {
+    id: 'buy',
+    name: 'Buy',
+    positions: [
+      ownedPropertyPosition('buy:home', {
+        purchasePrice: propertyPrice,
+        entryCosts,
+        loan: { principal: loanPrincipal, annualRate: () => HOME_LOAN_RATE, tenureMonths: HOME_LOAN_TENURE_MONTHS },
+        appreciationSeries: PROPERTY_APPRECIATION_SERIES,
+        maintenancePerMonth: () => Math.round(inputs.monthlyHousingBudget * MAINTENANCE_SHARE_OF_BUDGET),
+        annualPropertyTax: Math.round(inputs.monthlyHousingBudget * 12 * PROPERTY_TAX_SHARE_OF_ANNUAL_BUDGET),
+        liquidityTier: 2,
+      }),
+    ],
+    exitConfigs: [{ positionId: 'buy:home', capitalGainsTreatment: 'property', costOfAcquisition: propertyPrice + entryCosts }],
+    growthAssumptions: [{ positionId: 'buy:home', seriesId: PROPERTY_APPRECIATION_SERIES, label: 'Buy: property appreciation' }],
+    sweepGrowthSeries: SWEEP_SERIES,
+    sweepExitConfig: { capitalGainsTreatment: 'equity' },
+  };
+
+  // --- Rent an equivalent home; the equalisation sweep invests the rest of the budget ---
+  const assumedMonthlyRent = Math.round((propertyPrice * ASSUMED_GROSS_RENTAL_YIELD) / 12);
+  const securityDeposit = assumedMonthlyRent * SECURITY_DEPOSIT_MONTHS;
+
+  const rentScenario: Scenario = {
+    id: 'rent',
+    name: 'Rent & invest the difference',
+    positions: [rentalExpensePosition('rent:home', { monthlyRent: () => assumedMonthlyRent, securityDeposit })],
+    exitConfigs: [{ positionId: 'rent:home', capitalGainsTreatment: 'none' }],
+    sweepGrowthSeries: SWEEP_SERIES,
+    sweepExitConfig: { capitalGainsTreatment: 'equity' },
+  };
+
+  const assumptions: AssumptionSeries[] = [
+    { id: PROPERTY_APPRECIATION_SERIES, rate: PROPERTY_APPRECIATION_RATE, label: 'Property appreciation — conservative default' },
+    { id: SWEEP_SERIES, rate: SWEEP_RATE, label: 'Default reinvestment instrument (broad index fund) — shared by both scenarios' },
+  ];
+  const ctx = buildMarketContext(assumptions);
+
+  const grossSalaryAnnual = solveGrossSalaryForNetIncome(
+    inputs.monthlyHouseholdIncomeNet * 12,
+    { regime: HOUSEHOLD_REGIME, age: HOUSEHOLD_AGE },
+    incomeTaxRules,
+  );
+  const household: HouseholdTaxConfig = {
+    regime: HOUSEHOLD_REGIME,
+    age: HOUSEHOLD_AGE,
+    grossSalaryAnnual: () => grossSalaryAnnual,
+  };
+
+  const compareOptions: CompareOptions = {
+    scenarios: [buyScenario, rentScenario],
+    ctx,
+    horizonsMonths: [...HORIZONS_MONTHS],
+    startFy,
+    household,
+    cii,
+  };
+  const result = compare(compareOptions);
+
+  const selectedHorizonMonths = inputs.horizonYears * 12;
+
+  return {
+    result,
+    scenarios: [buyScenario, rentScenario],
+    ctx,
+    household,
+    startFy,
+    horizonsMonths: HORIZONS_MONTHS,
+    selectedHorizonMonths,
+    buy: { propertyPrice, loanPrincipal, entryCosts },
+    rent: { assumedMonthlyRent, securityDeposit },
+    assumptions,
+  };
+}
+
+export interface HurdleSentence {
+  /** Which scenario is behind at the selected horizon and needs the higher rate. */
+  laggingScenarioName: string;
+  leadingScenarioName: string;
+  /** The rate the lagging scenario's own growth series would need to compound at to match the leader — null if solveHurdleRate couldn't bracket a solution in a plausible range. */
+  requiredRate: number | null;
+  assumedRate: number;
+}
+
+/** The brief's headline output (principle 4): what return does the scenario behind need, to catch the one ahead, at the horizon the user actually asked about. */
+export function computeHurdleSentence(layerOne: LayerOneResult): HurdleSentence {
+  const horizonIndex = layerOne.horizonsMonths.indexOf(layerOne.selectedHorizonMonths);
+  const idx = horizonIndex === -1 ? layerOne.horizonsMonths.length - 1 : horizonIndex;
+  const horizonMonths = layerOne.horizonsMonths[idx]!;
+
+  const [buyComparison, rentComparison] = layerOne.result.scenarios;
+  const buyNetWorth = buyComparison!.perHorizon[idx]!.terminalNetWorth;
+  const rentNetWorth = rentComparison!.perHorizon[idx]!.terminalNetWorth;
+
+  const buyLeads = buyNetWorth >= rentNetWorth;
+  const [buyScenario, rentScenario] = layerOne.scenarios;
+  const laggingScenario = buyLeads ? rentScenario : buyScenario;
+  const leadingScenarioName = buyLeads ? 'Buying' : 'Renting & investing';
+  const laggingScenarioName = buyLeads ? 'Renting & investing' : 'Buying';
+  const targetTerminalNetWorth = buyLeads ? buyNetWorth : rentNetWorth;
+  const seriesToSolve = buyLeads ? SWEEP_SERIES : PROPERTY_APPRECIATION_SERIES;
+  const assumedRate = buyLeads ? SWEEP_RATE : PROPERTY_APPRECIATION_RATE;
+
+  const frozenTargetByMonth = layerOne.result.scenarios[0]!.equalisedMonthlyOutflow;
+
+  try {
+    const requiredRate = solveHurdleRate(
+      laggingScenario,
+      seriesToSolve,
+      layerOne.ctx,
+      frozenTargetByMonth,
+      horizonMonths,
+      targetTerminalNetWorth,
+      layerOne.startFy,
+      layerOne.household,
+      getCostInflationIndexRules(),
+    );
+    return { laggingScenarioName, leadingScenarioName, requiredRate, assumedRate };
+  } catch {
+    return { laggingScenarioName, leadingScenarioName, requiredRate: null, assumedRate };
+  }
+}
