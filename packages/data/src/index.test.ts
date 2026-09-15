@@ -4,10 +4,13 @@ import {
   getCapitalGainsRules,
   getCostInflationIndexRules,
   getIncomeTaxRules,
+  getReitDistributionRules,
   getRulePack,
+  getStampDutyRules,
   listRulePacks,
   lookupCII,
   parseRulePack,
+  stampDutyAndRegistrationCost,
 } from './index';
 
 const fixture = {
@@ -49,9 +52,9 @@ describe('@fincalc/data rule-pack envelope', () => {
 });
 
 describe('@fincalc/data shipped packs (Phase 2: income-tax and capital-gains)', () => {
-  it('ships five packs — income-tax and capital-gains for FY2026-27/FY2025-26, plus the cost-inflation-index table — and every one validates', () => {
+  it('ships eight packs — income-tax, capital-gains and reit-distributions for FY2026-27/FY2025-26, plus the cost-inflation-index and stamp-duty tables — and every one validates', () => {
     const packs = listRulePacks();
-    expect(packs).toHaveLength(5);
+    expect(packs).toHaveLength(8);
     for (const pack of packs) expect(() => parseRulePack(pack)).not.toThrow();
   });
 
@@ -74,6 +77,8 @@ describe('@fincalc/data shipped packs (Phase 2: income-tax and capital-gains)', 
       expect(rules.regimes.old.standardDeduction).toBe(50000);
       expect(rules.regimes.new.hraExemptionAllowed).toBe(false);
       expect(rules.regimes.old.hraExemptionAllowed).toBe(true);
+      // Section 24(a) [old Act] / Section 22 [new Act] — flat 30%, regime-independent.
+      expect(rules.houseProperty.standardDeductionRate).toBe(0.3);
     }
   });
 
@@ -103,5 +108,58 @@ describe('@fincalc/data shipped packs (Phase 2: income-tax and capital-gains)', 
     const cii = getCostInflationIndexRules();
     expect(lookupCII('2026-27', cii)).toBe(384);
     expect(() => lookupCII('2050-51', cii)).toThrow(RangeError);
+  });
+
+  it('getStampDutyRules covers Telangana (municipal corporation) and Maharashtra (municipal council)', () => {
+    const stampDuty = getStampDutyRules();
+    expect(stampDuty.states.TG?.byLocalBody.municipal_corporation?.stampDutyRateMale).toBe(0.04);
+    expect(stampDuty.states.TG?.byLocalBody.municipal_corporation?.transferDuty).toBe(0.015);
+    expect(stampDuty.states.MH?.byLocalBody.municipal_council?.stampDutyRateFemale).toBe(0.03);
+    expect(stampDuty.states.MH?.byLocalBody.municipal_council?.registrationFeeCap).toBe(30_000);
+  });
+
+  it('stampDutyAndRegistrationCost: Hyderabad (Telangana, municipal corporation) totals 6% plus capped-free registration', () => {
+    const stampDuty = getStampDutyRules();
+    const rates = stampDuty.states.TG!.byLocalBody.municipal_corporation!;
+    // ₹2,90,00,000 property: 4% + 1.5% transfer duty + 0.5% registration (uncapped) = 6% flat
+    expect(stampDutyAndRegistrationCost(29_000_000, rates)).toBeCloseTo(29_000_000 * 0.06, 2);
+  });
+
+  it('stampDutyAndRegistrationCost: Raigad (Maharashtra, municipal council) caps the registration fee above ₹30L', () => {
+    const stampDuty = getStampDutyRules();
+    const rates = stampDuty.states.MH!.byLocalBody.municipal_council!;
+    // ₹75,00,000 plot: 4% stamp duty + registration capped at ₹30,000 (1% of 75L would be ₹75,000, so the cap binds)
+    expect(stampDutyAndRegistrationCost(7_500_000, rates)).toBeCloseTo(7_500_000 * 0.04 + 30_000, 2);
+    // A sole female buyer gets the 3% rate
+    expect(stampDutyAndRegistrationCost(7_500_000, rates, 'female')).toBeCloseTo(7_500_000 * 0.03 + 30_000, 2);
+  });
+
+  it('getStampDutyRules exposes the GST-on-under-construction rates', () => {
+    const stampDuty = getStampDutyRules();
+    expect(stampDuty.gstOnUnderConstruction.nonAffordableRate).toBe(0.05);
+    expect(stampDuty.gstOnUnderConstruction.affordableHousingRate).toBe(0.01);
+    expect(stampDuty.gstOnUnderConstruction.readyToMoveWithOccupancyCertificateRate).toBe(0);
+  });
+
+  it('getReitDistributionRules: interest, rental and return-of-capital are identical across both FYs', () => {
+    const fy2025 = getReitDistributionRules('2025-26');
+    const fy2026 = getReitDistributionRules('2026-27');
+    expect(fy2025.interest).toEqual(fy2026.interest);
+    expect(fy2025.rental).toEqual(fy2026.rental);
+    expect(fy2025.returnOfCapital).toEqual(fy2026.returnOfCapital);
+  });
+
+  it('getReitDistributionRules: the dividend component rule changes between FY2025-26 and FY2026-27', () => {
+    const fy2025 = getReitDistributionRules('2025-26');
+    const fy2026 = getReitDistributionRules('2026-27');
+    // FY2025-26: taxability depends on the SPV's 115BAA election
+    expect(fy2025.dividend.dependsOnSpvConcessionalRegimeElection).toBe(true);
+    expect(fy2025.dividend.taxableIfSpvOptedIntoConcessionalRegime).toBe(true);
+    // FY2026-27: TOLA 2026 removed the dependency — exempt regardless
+    expect(fy2026.dividend.dependsOnSpvConcessionalRegimeElection).toBe(false);
+  });
+
+  it('getReitDistributionRules throws for an FY with no reit-distributions pack', () => {
+    expect(() => getReitDistributionRules('2019-20')).toThrow(RangeError);
   });
 });

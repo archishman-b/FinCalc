@@ -1,0 +1,100 @@
+{
+  "id": "stamp-duty",
+  "fy": "2026-27",
+  "jurisdiction": "IN",
+  "effectiveFrom": "2026-09-15",
+  "provenance": {
+    "source": "https://cleartax.in/s/stamp-duty-and-registration-charges-in-maharashtra",
+    "verifiedOn": "2026-09-15",
+    "note": "Stamp duty is set by state notification, not the Union Budget cycle, so unlike income-tax/capital-gains packs this one has no natural FY boundary \u2014 'fy' here just marks 'current as of' the verification date. Direct .gov.in access (Telangana IGRS, Maharashtra IGR, CBIC) was blocked in this environment for every domain tried, so every figure here is cross-verified against 3+ independent, recently-updated (2026) secondary sources rather than a primary fetch \u2014 see per-entry citations for exact sources and confidence. Recommend confirming the Raigad/Karjat/Khopoli figure directly with the Sub-Registrar office or IGR Maharashtra's Annual Statement of Rates (ASR) before this number drives a real transaction decision."
+  },
+  "citations": {
+    "states.TG.byLocalBody.municipal_corporation": {
+      "source": "https://homefirstindia.com/blog/article/stamp-duty-registration-charges-telangana",
+      "verifiedOn": "2026-09-15",
+      "note": "4% stamp duty + 1.5% transfer duty (within GHMC/municipal/corporation limits) + 0.5% registration = 6% total. Cross-checked against squareyards.com (updated 2026-07-07) and 1acre.in's Telangana calculator, all three agreeing exactly. No gender-based discount found for Telangana (unlike Maharashtra). Could not confirm against registration.telangana.gov.in directly (blocked in this environment) or find a notification date for these standing rates."
+    },
+    "states.TG.byLocalBody.gram_panchayat": {
+      "source": "https://homefirstindia.com/blog/article/stamp-duty-registration-charges-telangana",
+      "verifiedOn": "2026-09-15",
+      "note": "5.5% stamp duty + 2% registration, no separate transfer duty = 7.5% total, for rural/Gram Panchayat areas. Shipped for completeness; not needed by the founding scenario."
+    },
+    "states.MH.byLocalBody.municipal_council": {
+      "source": "https://edgere.in/stamp-duty-registration-ready-reckoner-rate-on-land-in-maharashtra-2026/",
+      "verifiedOn": "2026-09-15",
+      "note": "4% (male/joint) / 3% (sole female buyer) stamp duty, no metro cess. This edgere.in source (2026) explicitly names Karjat and Khopoli as Municipal Council areas in this rate band and states the metro cess applies only to Mumbai, not other regions -- resolving an earlier uncertainty about whether Raigad's Nagar Parishads, being geographically inside the wider Mumbai Metropolitan Region, might carry the cess. Corroborated by raigad.gov.in's own listing of Karjat and Khopoli as Municipal Councils (not Gram Panchayats), and by cleartax.in and a 1acre.in calculator both giving the same 4%/3% figure for the generic 'Municipal Council' bucket. Registration fee: 1% of property value, capped at Rs 30,000 for properties valued above Rs 30 lakh (uncapped 1% below that) -- per cleartax.in and Compliance Calendar (2025-dated). Plot and built-apartment purchases take the same rate in Maharashtra -- the structure is keyed by local-body classification, not property type. Could not confirm any of this against igrmaharashtra.gov.in directly (blocked in this environment); recommend a direct check before a real transaction."
+    },
+    "states.MH.byLocalBody.gram_panchayat": {
+      "source": "https://edgere.in/stamp-duty-registration-ready-reckoner-rate-on-land-in-maharashtra-2026/",
+      "verifiedOn": "2026-09-15",
+      "note": "~3% (male) / ~2% (female) stamp duty for true rural Gram Panchayat areas, same 1% registration fee structure. Shipped for completeness; not needed by the founding scenario."
+    },
+    "gstOnUnderConstruction": {
+      "source": "https://taxguru.in/goods-and-service-tax/gst-real-estate-sector-rates-itc-valuation-rules.html",
+      "verifiedOn": "2026-09-15",
+      "note": "1% (affordable housing: carpet area <=60 sqm metro / <=90 sqm non-metro, value <=Rs 45 lakh) / 5% (other under-construction residential), both without input tax credit, per the scheme under Notification No. 03/2019-Central Tax (Rate) (effective 1 April 2019, amending Notification No. 11/2017). Ready-to-move property with an Occupancy/Completion Certificate is not a 'supply' for GST at all (0%). The 56th GST Council meeting (3 Sep 2025, 'GST 2.0' reforms effective 22 Sep 2025) changed construction *input* rates (cement 28% -> 18%, sand-lime bricks 12% -> 5%) but left these buyer-facing residential rates unchanged -- corroborated by busy.in and rmpsco.com's specific analysis of the Council meeting. Could not confirm the exact notification number/date against cbic.gov.in directly (blocked in this environment); the 1%/5%/0% rates themselves are well-established and corroborated across three independent sources."
+    }
+  },
+  "rules": {
+    "states": {
+      "TG": {
+        "state": "Telangana",
+        "byLocalBody": {
+          "municipal_corporation": {
+            "stampDutyRateMale": 0.04,
+            "stampDutyRateFemale": 0.04,
+            "transferDuty": 0.015,
+            "metroCess": 0.0,
+            "registrationFeeRate": 0.005,
+            "registrationFeeCap": null
+          },
+          "gram_panchayat": {
+            "stampDutyRateMale": 0.055,
+            "stampDutyRateFemale": 0.055,
+            "transferDuty": 0.0,
+            "metroCess": 0.0,
+            "registrationFeeRate": 0.02,
+            "registrationFeeCap": null
+          }
+        },
+        "localityNotes": {
+          "Hyderabad (GHMC)": "municipal_corporation"
+        },
+        "plotVsBuiltPropertySameRate": true
+      },
+      "MH": {
+        "state": "Maharashtra",
+        "byLocalBody": {
+          "municipal_council": {
+            "stampDutyRateMale": 0.04,
+            "stampDutyRateFemale": 0.03,
+            "transferDuty": 0.0,
+            "metroCess": 0.0,
+            "registrationFeeRate": 0.01,
+            "registrationFeeCap": 30000
+          },
+          "gram_panchayat": {
+            "stampDutyRateMale": 0.03,
+            "stampDutyRateFemale": 0.02,
+            "transferDuty": 0.0,
+            "metroCess": 0.0,
+            "registrationFeeRate": 0.01,
+            "registrationFeeCap": 30000
+          }
+        },
+        "localityNotes": {
+          "Karjat (Raigad)": "municipal_council",
+          "Khopoli (Raigad)": "municipal_council"
+        },
+        "plotVsBuiltPropertySameRate": true
+      }
+    },
+    "gstOnUnderConstruction": {
+      "affordableHousingRate": 0.01,
+      "affordableHousingCriteria": "carpet area <=60 sqm (metro) or <=90 sqm (non-metro), and value <=Rs 45 lakh",
+      "nonAffordableRate": 0.05,
+      "inputTaxCreditAllowed": false,
+      "readyToMoveWithOccupancyCertificateRate": 0
+    }
+  }
+}

@@ -63,8 +63,22 @@ export const SurchargeSlab = z.object({
 });
 export type SurchargeSlab = z.infer<typeof SurchargeSlab>;
 
+/**
+ * Section 24(a) [old Act, IT Act 1961] / Section 22 [new Act, IT Act 2025]
+ * standard deduction against a let-out property's Net Annual Value — a flat
+ * 30%, identical under both regimes and both Acts, so it lives at the
+ * top level rather than inside `regimes.old`/`regimes.new`. Not available
+ * against a self-occupied property (nil annual value has no NAV to deduct
+ * from) — see `section24bSelfOccupiedCap` for that case instead.
+ */
+export const HousePropertyRules = z.object({
+  standardDeductionRate: z.number().min(0).max(1),
+});
+export type HousePropertyRules = z.infer<typeof HousePropertyRules>;
+
 export const IncomeTaxRules = z.object({
   regimes: z.object({ new: RegimeRules, old: RegimeRules }),
+  houseProperty: HousePropertyRules,
   surcharge: z.object({
     /** Same slabs apply to both regimes' ordinary (slab-rate) income. */
     slabs: z.array(SurchargeSlab),

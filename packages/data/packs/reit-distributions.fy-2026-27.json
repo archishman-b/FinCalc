@@ -1,0 +1,55 @@
+{
+  "id": "reit-distributions.fy-2026-27",
+  "fy": "2026-27",
+  "jurisdiction": "IN",
+  "effectiveFrom": "2026-04-01",
+  "provenance": {
+    "source": "https://www.incometaxindia.gov.in/w/section-115ua",
+    "verifiedOn": "2026-09-15",
+    "note": "Interest, rental, and the return-of-capital mechanism are unchanged between FY2025-26 and FY2026-27 -- only the dividend component's rule changed, via the Taxation and Other Laws (Amendment) Act 2026 (assented 17 Aug 2026, deemed effective 1 Apr 2026). See the per-entry citations for exact sections and confidence; full research trail (every source, exact quotes, a doctrinal caveat on the section-115UA(2)-to-112A link, and open questions) is saved as the project doc claude/reit-invit-taxation-research.md."
+  },
+  "citations": {
+    "interest": {
+      "source": "https://www.taxbuddy.com/blog/section-194lba-of-the-income-tax-a",
+      "verifiedOn": "2026-09-15",
+      "note": "Taxable at slab as 'Income from Other Sources'; old Act 10(23FC)(a)/115UA(1), new Act Schedule V S.No.3/Section 223(1) (new-Act section numbers are a secondary-source mapping, not a bare-text fetch -- MODERATE confidence on those specifically). TDS 194LBA(1) 10% resident / 5% non-resident, no minimum threshold. HIGH confidence on the mechanism and old-Act sections, corroborated by a direct incometaxindia.gov.in fetch of Section 115UA(1) plus multiple concordant secondary sources."
+    },
+    "dividend": {
+      "source": "https://www.mondaq.com/india/tax-authorities/1831076/recent-tax-amendments-restoring-the-dividend-exemption-for-reit-and-invit-unit-holders",
+      "verifiedOn": "2026-09-15",
+      "note": "FY2026-27 (new Act 2025): CHANGED from FY2025-26. The Taxation and Other Laws (Amendment) Act 2026 (Lok Sabha 6 Aug 2026, Rajya Sabha 10 Aug 2026, Presidential assent 17 Aug 2026, deemed effective 1 Apr 2026) removed the SPV-115BAA dependency: the dividend component is now exempt in the unit-holder's hands regardless of the SPV's regime election. HIGH confidence on the fact of enactment and effective date (corroborated by PRS India's official bill tracker and a government source, newsonair.gov.in). MODERATE confidence on the precise Schedule V/Column D drafting mechanics (secondary-source description only). See tdsNote for an unresolved TDS-conformity gap flagged by one detailed technical source -- not a settled question."
+    },
+    "rental": {
+      "source": "https://cleartax.in/s/taxation-of-reit-and-invit",
+      "verifiedOn": "2026-09-15",
+      "note": "Taxable at slab as 'Income from Other Sources' (not house property), old Act 10(23FCA), TDS 194LBA 10%, no threshold. HIGH confidence -- 4-source consensus (ClearTax, Finnovate, PrimeInvestor, BusinessToday's TOLA-2026 coverage explicitly confirming rental is untouched by the 2026 amendment). One source (Tax Garden) claimed this is exempt for AY2026-27 -- contradicted by every other source found including the TOLA 2026 coverage itself; treated as an error, not encoded."
+    },
+    "returnOfCapital": {
+      "source": "https://vinodkothari.com/2023/02/residual-income-from-reits-and-invits-now-covered-under-section-56-of-income-tax-act/",
+      "verifiedOn": "2026-09-15",
+      "note": "Not taxed on receipt; reduces cost of acquisition. When cumulative 'other' (non-interest/dividend/rental) distributions exceed the original cost of acquisition, the excess is taxed each year as 'Income from Other Sources' at slab rate -- NOT as a capital gain -- under old Act Section 56(2)(xii) (inserted by Finance Act 2023, effective AY2024-25) / new Act Section 92(2)(k). Formula as reported: taxable = (cumulative non-interest/dividend/rent distributions to date) - (original cost of acquisition) - (amount already taxed under this clause in an earlier year). MODERATE-HIGH confidence -- three independent sources agree (Vinod Kothari Consultants, a specialist structured-finance/REIT advisory; Finnovate; TaxTMI's clause-mapping page), but the literal bare-Act text of 56(2)(xii) could not be independently fetched in this session (indiankanoon blocked)."
+    }
+  },
+  "rules": {
+    "interest": {
+      "taxable": true,
+      "head": "other_sources",
+      "tdsRateResident": 0.1
+    },
+    "dividend": {
+      "dependsOnSpvConcessionalRegimeElection": false,
+      "taxableIfSpvOptedIntoConcessionalRegime": false,
+      "tdsNote": "Dividend is exempt regardless of the SPV's regime election (Taxation and Other Laws (Amendment) Act 2026 removed the dependency from new Act Schedule V, Table S.No.5). OPEN QUESTION -- not resolved: the corresponding TDS provision (new Act Section 393(4)) had NOT been conformingly amended as of a 23 Aug 2026 technical source, so TDS may still be withheld on this now-exempt income pending CBDT clarification. Treat any TDS deducted on this component as a refundable credit, not as evidence the income is actually taxable."
+    },
+    "rental": {
+      "taxable": true,
+      "head": "other_sources",
+      "tdsRateResident": 0.1
+    },
+    "returnOfCapital": {
+      "taxableOnReceipt": false,
+      "reducesCostOfAcquisition": true,
+      "excessOverCostBasisTaxedAs": "other_sources_slab_rate"
+    }
+  }
+}

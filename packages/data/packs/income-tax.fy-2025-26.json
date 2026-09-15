@@ -43,6 +43,11 @@
       "source": "https://taxguru.in/income-tax/hra-exemption-8-cities-qualify-50-percent-exemption-practical-guide.html",
       "verifiedOn": "2026-09-15",
       "note": "Confirmed 4-city list (Delhi, Mumbai, Kolkata, Chennai) for FY2025-26 ITR filing — source states the original four-city framework still governs."
+    },
+    "houseProperty.standardDeductionRate": {
+      "source": "https://cleartax.in/s/deductions-under-section24-income-from-house-property",
+      "verifiedOn": "2026-09-15",
+      "note": "Section 24(a), Income-tax Act 1961 — 30% of Net Annual Value, 'irrespective of incurring expenditure on insurance, repairs, etc.' Not available for a self-occupied property (nil annual value)."
     }
   },
   "rules": {
@@ -193,6 +198,9 @@
       ],
       "metroRate": 0.5,
       "nonMetroRate": 0.4
+    },
+    "houseProperty": {
+      "standardDeductionRate": 0.3
     }
   }
 }

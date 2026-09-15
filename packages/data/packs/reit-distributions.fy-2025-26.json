@@ -1,0 +1,55 @@
+{
+  "id": "reit-distributions.fy-2025-26",
+  "fy": "2025-26",
+  "jurisdiction": "IN",
+  "effectiveFrom": "2025-04-01",
+  "provenance": {
+    "source": "https://www.incometaxindia.gov.in/w/section-115ua",
+    "verifiedOn": "2026-09-15",
+    "note": "Interest, rental, and the return-of-capital mechanism are unchanged between FY2025-26 and FY2026-27 -- only the dividend component's rule changed, via the Taxation and Other Laws (Amendment) Act 2026 (assented 17 Aug 2026, deemed effective 1 Apr 2026). See the per-entry citations for exact sections and confidence; full research trail (every source, exact quotes, a doctrinal caveat on the section-115UA(2)-to-112A link, and open questions) is saved as the project doc claude/reit-invit-taxation-research.md."
+  },
+  "citations": {
+    "interest": {
+      "source": "https://www.taxbuddy.com/blog/section-194lba-of-the-income-tax-a",
+      "verifiedOn": "2026-09-15",
+      "note": "Taxable at slab as 'Income from Other Sources'; old Act 10(23FC)(a)/115UA(1), new Act Schedule V S.No.3/Section 223(1) (new-Act section numbers are a secondary-source mapping, not a bare-text fetch -- MODERATE confidence on those specifically). TDS 194LBA(1) 10% resident / 5% non-resident, no minimum threshold. HIGH confidence on the mechanism and old-Act sections, corroborated by a direct incometaxindia.gov.in fetch of Section 115UA(1) plus multiple concordant secondary sources."
+    },
+    "dividend": {
+      "source": "https://www.mondaq.com/india/tax-authorities/1831076/recent-tax-amendments-restoring-the-dividend-exemption-for-reit-and-invit-unit-holders",
+      "verifiedOn": "2026-09-15",
+      "note": "FY2025-26 (old Act 1961): if the SPV opted for Section 115BAA (22% concessional corporate rate), the dividend is taxable at the unit-holder's slab rate. If not, it's exempt under Section 10(23FD). Mechanism confirmed via the Section 194LBA(2A) proviso text (no TDS on 10(23FC)(b) dividend when the SPV hasn't opted 115BAA, because it's exempt to the recipient). HIGH confidence -- corroborated by 4+ independent sources (ClearTax, Finnovate, TaxGuru, Corporate Professionals/Mondaq) plus the bare 194LBA(2A) proviso text, all mutually consistent."
+    },
+    "rental": {
+      "source": "https://cleartax.in/s/taxation-of-reit-and-invit",
+      "verifiedOn": "2026-09-15",
+      "note": "Taxable at slab as 'Income from Other Sources' (not house property), old Act 10(23FCA), TDS 194LBA 10%, no threshold. HIGH confidence -- 4-source consensus (ClearTax, Finnovate, PrimeInvestor, BusinessToday's TOLA-2026 coverage explicitly confirming rental is untouched by the 2026 amendment). One source (Tax Garden) claimed this is exempt for AY2026-27 -- contradicted by every other source found including the TOLA 2026 coverage itself; treated as an error, not encoded."
+    },
+    "returnOfCapital": {
+      "source": "https://vinodkothari.com/2023/02/residual-income-from-reits-and-invits-now-covered-under-section-56-of-income-tax-act/",
+      "verifiedOn": "2026-09-15",
+      "note": "Not taxed on receipt; reduces cost of acquisition. When cumulative 'other' (non-interest/dividend/rental) distributions exceed the original cost of acquisition, the excess is taxed each year as 'Income from Other Sources' at slab rate -- NOT as a capital gain -- under old Act Section 56(2)(xii) (inserted by Finance Act 2023, effective AY2024-25) / new Act Section 92(2)(k). Formula as reported: taxable = (cumulative non-interest/dividend/rent distributions to date) - (original cost of acquisition) - (amount already taxed under this clause in an earlier year). MODERATE-HIGH confidence -- three independent sources agree (Vinod Kothari Consultants, a specialist structured-finance/REIT advisory; Finnovate; TaxTMI's clause-mapping page), but the literal bare-Act text of 56(2)(xii) could not be independently fetched in this session (indiankanoon blocked)."
+    }
+  },
+  "rules": {
+    "interest": {
+      "taxable": true,
+      "head": "other_sources",
+      "tdsRateResident": 0.1
+    },
+    "dividend": {
+      "dependsOnSpvConcessionalRegimeElection": true,
+      "taxableIfSpvOptedIntoConcessionalRegime": true,
+      "tdsNote": "10% TDS under 194LBA(1) if the SPV opted into 115BAA (dividend taxable); no TDS if it didn't (dividend exempt under Section 10(23FD), per the 194LBA(2A) proviso)."
+    },
+    "rental": {
+      "taxable": true,
+      "head": "other_sources",
+      "tdsRateResident": 0.1
+    },
+    "returnOfCapital": {
+      "taxableOnReceipt": false,
+      "reducesCostOfAcquisition": true,
+      "excessOverCostBasisTaxedAs": "other_sources_slab_rate"
+    }
+  }
+}

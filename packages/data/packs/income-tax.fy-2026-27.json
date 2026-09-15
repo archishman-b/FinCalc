@@ -48,6 +48,11 @@
       "source": "https://taxgarden.in/blog/section-80d-health-insurance-deduction-ay-2026-27-india",
       "verifiedOn": "2026-09-15",
       "note": "Limits unchanged (₹25,000/₹50,000 by age, self and parents; ₹1,00,000 combined max). Reported renumbered to Section 126 of the Income-tax Act, 2025 — corroborated by two independent secondary sources but NOT verified against the bare statute text directly; the rupee limits themselves are not in doubt."
+    },
+    "houseProperty.standardDeductionRate": {
+      "source": "https://www.axismaxlife.com/blog/tax-savings/section-22",
+      "verifiedOn": "2026-09-15",
+      "note": "Section 22 of the Income-tax Act, 2025 (replaces old Section 24) — carries the 30% standard deduction on house property annual value forward unchanged; corroborated by cleartax.in's description of the old Act's Section 24(a) mechanism (identical 30% figure, 'irrespective of actual expenditure'). Not available for a self-occupied property (nil annual value)."
     }
   },
   "rules": {
@@ -198,6 +203,9 @@
       ],
       "metroRate": 0.5,
       "nonMetroRate": 0.4
+    },
+    "houseProperty": {
+      "standardDeductionRate": 0.3
     }
   }
 }
