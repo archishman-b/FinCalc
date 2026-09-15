@@ -170,6 +170,21 @@ export function section24bDeduction(interest: number | undefined, cap: number | 
 }
 
 /**
+ * Section 71(3A)/109(1)(b): a net house-property loss can only be set off
+ * against other heads up to `cap` rupees this year (₹2,00,000 old regime;
+ * `0` under the new regime, where inter-head set-off is disallowed
+ * entirely — see the `housePropertyLossSetOffCapAgainstOtherHeads` doc
+ * comment in @fincalc/data for why this engine doesn't track the excess's
+ * 8-year carry-forward). A non-negative `netHouseProperty` (rent income
+ * exceeding deductions) passes through unchanged — the cap only bites a
+ * loss.
+ */
+export function capHousePropertyLossSetOff(netHouseProperty: number, cap: number): number {
+  if (netHouseProperty >= 0) return netHouseProperty;
+  return -round2(Math.min(-netHouseProperty, cap));
+}
+
+/**
  * Section 87A rebate. Below/at the threshold income, the rebate zeroes tax
  * up to `maxRebate` (a cliff either way — the old regime's ₹12,500 always
  * fully covers slab tax at ₹5L). Above the threshold: the old regime gets
@@ -267,7 +282,8 @@ export function computeIncomeTax(input: IncomeTaxInput, rules: IncomeTaxRules): 
   const netSalary = Math.max(0, grossSalary - hraExemptionAmount - standardDeduction);
 
   const section24b = section24bDeduction(input.selfOccupiedHomeLoanInterest, regimeRules.section24bSelfOccupiedCap);
-  const netHouseProperty = (input.housePropertyIncome ?? 0) - section24b;
+  const rawHouseProperty = (input.housePropertyIncome ?? 0) - section24b;
+  const netHouseProperty = capHousePropertyLossSetOff(rawHouseProperty, regimeRules.housePropertyLossSetOffCapAgainstOtherHeads);
 
   const grossTotalIncome = round2(netSalary + netHouseProperty + (input.otherSourcesIncome ?? 0));
 

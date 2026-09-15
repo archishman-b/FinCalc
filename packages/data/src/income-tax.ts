@@ -53,6 +53,19 @@ export const RegimeRules = z.object({
   section80dLimits: Section80DLimits.nullable(),
   /** Section 24(b)/22 interest cap for a self-occupied property; null means disallowed under this regime. Let-out property interest is uncapped under both regimes and isn't modelled here. */
   section24bSelfOccupiedCap: z.number().nonnegative().nullable(),
+  /**
+   * Section 71(3A) [old Act 1961] / Section 109(1)(b) [new Act 2025]: the
+   * rupee cap on setting a house-property loss off against other heads of
+   * income (salary, other sources) in the same year. Old regime: ₹2,00,000.
+   * New regime (115BAC/202): inter-head set-off is disallowed entirely —
+   * modelled as `0`, not `null`, since (unlike section24bSelfOccupiedCap)
+   * a loss genuinely exists and is genuinely capped at zero, rather than
+   * the deduction not existing at all. Excess loss carries forward 8
+   * assessment years (Section 71B) against *future house-property income
+   * only* — this engine does not track that carryforward (see the
+   * `IncomeTaxRules` doc comment for why).
+   */
+  housePropertyLossSetOffCapAgainstOtherHeads: z.number().nonnegative(),
 });
 export type RegimeRules = z.infer<typeof RegimeRules>;
 
@@ -76,6 +89,17 @@ export const HousePropertyRules = z.object({
 });
 export type HousePropertyRules = z.infer<typeof HousePropertyRules>;
 
+/**
+ * Note on `regimes.*.housePropertyLossSetOffCapAgainstOtherHeads`: a
+ * household's actual house-property loss can exceed the cap and carry
+ * forward up to 8 assessment years against future house-property income
+ * (Section 71B) — this engine intentionally does not track that
+ * carryforward across years. Documented simplification, not a guess: it
+ * only matters for a let-out property whose year-1 interest-heavy loss
+ * exceeds ₹2L (old regime) and later turns profitable as rent escalates
+ * past interest, and even then only recovers a second-order amount. Every
+ * FY's tax computation treats each year's disallowed excess as sunk.
+ */
 export const IncomeTaxRules = z.object({
   regimes: z.object({ new: RegimeRules, old: RegimeRules }),
   houseProperty: HousePropertyRules,

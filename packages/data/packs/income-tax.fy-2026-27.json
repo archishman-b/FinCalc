@@ -53,6 +53,16 @@
       "source": "https://www.axismaxlife.com/blog/tax-savings/section-22",
       "verifiedOn": "2026-09-15",
       "note": "Section 22 of the Income-tax Act, 2025 (replaces old Section 24) — carries the 30% standard deduction on house property annual value forward unchanged; corroborated by cleartax.in's description of the old Act's Section 24(a) mechanism (identical 30% figure, 'irrespective of actual expenditure'). Not available for a self-occupied property (nil annual value)."
+    },
+    "regimes.old.housePropertyLossSetOffCapAgainstOtherHeads": {
+      "source": "https://www.patronaccounting.com/blog/house-property-loss-set-off-rs-2-lakh-cap-old-regime",
+      "verifiedOn": "2026-09-15",
+      "note": "Old-regime cap of ₹2,00,000 on house-property loss set-off against other heads (Section 71(3A), IT Act 1961 -> Section 109(1)(b), Income-tax Act 2025 per TaxGuru's transition mapping); the rupee figure itself is unchanged by the renumbering."
+    },
+    "regimes.new.housePropertyLossSetOffCapAgainstOtherHeads": {
+      "source": "https://www.taxbuddy.com/blog/house-property-loss-set-off",
+      "verifiedOn": "2026-09-15",
+      "note": "New regime (115BAC / new-Act Section 202) disallows inter-head set-off of house-property loss entirely -- modelled as a ₹0 cap, not null (a loss genuinely exists, it just can't offset other heads this year)."
     }
   },
   "rules": {
@@ -98,7 +108,8 @@
         "hraExemptionAllowed": false,
         "section80cLimit": null,
         "section80dLimits": null,
-        "section24bSelfOccupiedCap": null
+        "section24bSelfOccupiedCap": null,
+        "housePropertyLossSetOffCapAgainstOtherHeads": 0
       },
       "old": {
         "actSection": "Section 202 opt-out / Chapter equivalent (Income-tax Act, 2025) — old-regime computation continues as before under the new Act per incometax.gov.in guidance",
@@ -168,7 +179,8 @@
           "parentsUnder60": 25000,
           "parents60OrAbove": 50000
         },
-        "section24bSelfOccupiedCap": 200000
+        "section24bSelfOccupiedCap": 200000,
+        "housePropertyLossSetOffCapAgainstOtherHeads": 200000
       }
     },
     "surcharge": {
