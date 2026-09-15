@@ -11,7 +11,7 @@ export function App() {
   const packs = listRulePacks().length;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col justify-between px-5 py-10 text-neutral-900 sm:px-8 dark:text-neutral-100">
+    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-10 text-neutral-900 sm:px-8 dark:text-neutral-100">
       <header className="space-y-6">
         <p className="text-sm text-neutral-500 dark:text-neutral-400">FinCalc</p>
         <h1 className="text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
