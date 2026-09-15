@@ -88,3 +88,32 @@
     }
   }
 }
+
+/*
+ * Phase 8 (brief §4): "a one-page PDF summary" — implemented as a print
+ * stylesheet plus a "Print / save as PDF" button (ScenarioTools.tsx) that
+ * calls window.print(), rather than a client-side PDF-generation library.
+ * Every modern browser's print dialog already offers "Save as PDF" with no
+ * extra download step, and this keeps brief principle 6's "runs entirely
+ * in your browser, no backend" promise without a new dependency — a
+ * deliberate, documented substitution for a literal one-click file
+ * download, not a silently narrower one. Hides everything that is
+ * interaction rather than information: the back button and every other
+ * <button> (Compare/Load/Delete/Run simulation/Save/Copy link/Export/
+ * Print all live in <button> — none of them mean anything on paper), the
+ * Layer-1 input form itself (its values are already restated in the
+ * result and the assumptions strip), and the Saved-scenarios and
+ * Save-and-share panels (session-local browser features, not scenario
+ * output). What's left — parity warnings, the hurdle sentence, the chart,
+ * the results table, the tornado chart, a computed Monte Carlo table, the
+ * assumptions strip, and the disclaimer footer — is the actual one-page
+ * summary.
+ */
+@media print {
+  button,
+  form,
+  .saved-scenarios-panel,
+  .scenario-tools {
+    display: none !important;
+  }
+}

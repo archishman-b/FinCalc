@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { formatINR } from '@fincalc/ui';
 
 import { Amount } from '../components/Amount';
 import { MonteCarloPanel } from '../components/MonteCarloPanel';
 import { ResultChart } from '../components/ResultChart';
+import { SavedScenariosPanel, ScenarioActions } from '../components/ScenarioTools';
 import {
   buildLayerOneComparison,
   computeHurdleSentence,
@@ -14,14 +15,24 @@ import {
   type LayerOneInputs,
   type LayerOneResult,
 } from '../lib/scenario-builder';
+import { deleteSavedScenario, listSavedScenarios, saveScenario, type SavedScenario } from '../lib/saved-scenarios';
+import { readScenarioStateFromUrl, syncScenarioStateToUrl } from '../lib/scenario-url';
 import { navigate } from '../lib/router';
 
 /** Layer 1 (brief §4): six inputs at most, a real answer in about a minute. This flow uses four — city, household income, housing budget, horizon — exactly what the brief specifies, with everything else defaulted and shown in the assumptions strip below the result. */
 export function Comparator() {
-  const [monthlyIncome, setMonthlyIncome] = useState(450_000);
-  const [monthlyBudget, setMonthlyBudget] = useState(155_000);
-  const [horizonYears, setHorizonYears] = useState<HorizonYears>(15);
-  const [submitted, setSubmitted] = useState(false);
+  // Phase 8 (brief §4 "Sharing and persistence"): a pasted link with a `?s=` param seeds the
+  // form and runs the comparison immediately, rather than just prefilling fields the visitor
+  // still has to submit — see scenario-url.ts's module doc. Recomputed on every render (cheap —
+  // a query-string parse and a base64 decode) but only its *first* evaluation is ever used, since
+  // React ignores a useState initial-value argument on every render after the first.
+  const initialFromUrl = readScenarioStateFromUrl() ?? {};
+
+  const [monthlyIncome, setMonthlyIncome] = useState(initialFromUrl.monthlyHouseholdIncomeNet ?? 450_000);
+  const [monthlyBudget, setMonthlyBudget] = useState(initialFromUrl.monthlyHousingBudget ?? 155_000);
+  const [horizonYears, setHorizonYears] = useState<HorizonYears>(initialFromUrl.horizonYears ?? 15);
+  const [submitted, setSubmitted] = useState(Object.keys(initialFromUrl).length > 0);
+  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>(() => listSavedScenarios());
 
   // A single discriminated result rather than a value plus a setState-in-useMemo
   // side effect: buildLayerOneComparison can throw on degenerate inputs (see
@@ -43,9 +54,34 @@ export function Comparator() {
     }
   }, [submitted, layerOneInputs]);
 
+  // Phase 8: every successfully-computed scenario's inputs land in the address bar via
+  // replaceState (no navigation, no history entry) — see scenario-url.ts's own doc comment on
+  // why this makes the URL itself a valid share link even before anyone clicks "copy link".
+  useEffect(() => {
+    if (outcome?.ok) syncScenarioStateToUrl(layerOneInputs);
+  }, [outcome, layerOneInputs]);
+
   const layerOne = outcome?.ok ? outcome.value : null;
   const error = outcome && !outcome.ok ? outcome.error : null;
   const hurdle = useMemo(() => (layerOne ? computeHurdleSentence(layerOne) : null), [layerOne]);
+
+  function handleLoadScenario(inputs: LayerOneInputs) {
+    setMonthlyIncome(inputs.monthlyHouseholdIncomeNet);
+    setMonthlyBudget(inputs.monthlyHousingBudget);
+    setHorizonYears(inputs.horizonYears);
+    setSubmitted(true);
+  }
+
+  function handleSaveScenario(name: string): SavedScenario | null {
+    const saved = saveScenario(name, layerOneInputs);
+    setSavedScenarios(listSavedScenarios());
+    return saved;
+  }
+
+  function handleDeleteScenario(id: string) {
+    deleteSavedScenario(id);
+    setSavedScenarios(listSavedScenarios());
+  }
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-10 sm:px-8">
@@ -62,6 +98,8 @@ export function Comparator() {
         We&rsquo;ll size a representative home your budget can support, and compare buying it against renting an equivalent
         home and investing the difference — on equal monthly outflow, after tax.
       </p>
+
+      <SavedScenariosPanel scenarios={savedScenarios} onLoad={handleLoadScenario} onDelete={handleDeleteScenario} />
 
       <form
         className="mt-8 flex max-w-sm flex-col gap-5"
@@ -146,7 +184,13 @@ export function Comparator() {
       )}
 
       {layerOne && (
-        <ComparatorResult layerOne={layerOne} hurdleText={hurdle} horizonYears={horizonYears} layerOneInputs={layerOneInputs} />
+        <ComparatorResult
+          layerOne={layerOne}
+          hurdleText={hurdle}
+          horizonYears={horizonYears}
+          layerOneInputs={layerOneInputs}
+          onSaveScenario={handleSaveScenario}
+        />
       )}
 
       <footer className="mt-16 max-w-md space-y-1 text-sm text-ink-muted">
@@ -162,11 +206,13 @@ function ComparatorResult({
   hurdleText,
   horizonYears,
   layerOneInputs,
+  onSaveScenario,
 }: {
   layerOne: LayerOneResult;
   hurdleText: ReturnType<typeof computeHurdleSentence> | null;
   horizonYears: HorizonYears;
   layerOneInputs: LayerOneInputs;
+  onSaveScenario: (name: string) => SavedScenario | null;
 }) {
   const { result } = layerOne;
 
@@ -270,6 +316,9 @@ function ComparatorResult({
           </li>
         </ul>
       </div>
+
+      {/* 5. Save and share this scenario — Phase 8 (brief §4). Kept out of the printed page (index.css's @media print rule) since it's all interaction, nothing informational. */}
+      <ScenarioActions layerOne={layerOne} layerOneInputs={layerOneInputs} onSave={onSaveScenario} />
     </section>
   );
 }
