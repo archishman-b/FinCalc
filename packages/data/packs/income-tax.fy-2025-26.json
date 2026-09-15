@@ -1,0 +1,198 @@
+{
+  "id": "income-tax.fy-2025-26",
+  "fy": "2025-26",
+  "jurisdiction": "IN",
+  "effectiveFrom": "2025-04-01",
+  "provenance": {
+    "source": "https://cleartax.in/s/income-tax-slabs",
+    "verifiedOn": "2026-09-15",
+    "note": "Anchor source for the slab tables, standard deduction, 87A rebate and surcharge structure, cross-checked against indiabudget.gov.in's Finance Bill memorandum and (for FY2026-27) the Income-tax Act 2025 statute text on indiankanoon.org — see citations for the entries sourced from those primaries directly."
+  },
+  "citations": {
+    "regimes.new.slabs": {
+      "source": "https://www.indiabudget.gov.in/doc/memo.pdf",
+      "verifiedOn": "2026-09-15",
+      "note": "Finance Bill 2025 memorandum, Part I rates for AY 2026-27 (FY2025-26)."
+    },
+    "regimes.new.standardDeduction": {
+      "source": "https://www.oquilia.com/news/standard-deduction-75000-new-regime-fy-2025-26",
+      "verifiedOn": "2026-09-15",
+      "note": "Section 16(ia): ₹75,000 new regime, ₹50,000 old regime, for FY2025-26."
+    },
+    "regimes.new.rebate87A": {
+      "source": "https://tax2win.in/guide/section-87a",
+      "verifiedOn": "2026-09-15",
+      "note": "Section 87A of the Income-tax Act, 1961, as it stands for FY2025-26."
+    },
+    "regimes.old.section80cLimit": {
+      "source": "https://cleartax.in/s/80c-80-deductions",
+      "verifiedOn": "2026-09-15",
+      "note": "Section 80C, Income-tax Act 1961 — ₹1,50,000 cap, unchanged for FY2025-26."
+    },
+    "regimes.old.section24bSelfOccupiedCap": {
+      "source": "https://cleartax.in/s/deductions-under-section24-income-from-house-property",
+      "verifiedOn": "2026-09-15",
+      "note": "Section 24(b), Income-tax Act 1961 — ₹2,00,000 self-occupied cap, old regime only."
+    },
+    "surcharge.slabs": {
+      "source": "https://cleartax.in/s/marginal-relief-surcharge",
+      "verifiedOn": "2026-09-15",
+      "note": "Surcharge slabs/rates and the marginal-relief mechanism (excess tax vs excess income). Enhanced surcharge (25%/37%) is disapplied for dividend income and for gains taxed under 111A/112/112A (old Act) / 196/197/198 (new Act) — capped at 15% for those — see surcharge.capitalGainsCap."
+    },
+    "hra.metroCities": {
+      "source": "https://taxguru.in/income-tax/hra-exemption-8-cities-qualify-50-percent-exemption-practical-guide.html",
+      "verifiedOn": "2026-09-15",
+      "note": "Confirmed 4-city list (Delhi, Mumbai, Kolkata, Chennai) for FY2025-26 ITR filing — source states the original four-city framework still governs."
+    }
+  },
+  "rules": {
+    "regimes": {
+      "new": {
+        "actSection": "115BAC (Income-tax Act, 1961)",
+        "slabs": [
+          {
+            "upTo": 400000,
+            "rate": 0.0
+          },
+          {
+            "upTo": 800000,
+            "rate": 0.05
+          },
+          {
+            "upTo": 1200000,
+            "rate": 0.1
+          },
+          {
+            "upTo": 1600000,
+            "rate": 0.15
+          },
+          {
+            "upTo": 2000000,
+            "rate": 0.2
+          },
+          {
+            "upTo": 2400000,
+            "rate": 0.25
+          },
+          {
+            "upTo": null,
+            "rate": 0.3
+          }
+        ],
+        "standardDeduction": 75000,
+        "rebate87A": {
+          "thresholdIncome": 1200000,
+          "maxRebate": 60000,
+          "marginalRelief": true
+        },
+        "hraExemptionAllowed": false,
+        "section80cLimit": null,
+        "section80dLimits": null,
+        "section24bSelfOccupiedCap": null
+      },
+      "old": {
+        "actSection": "Chapter III/VI-A (Income-tax Act, 1961)",
+        "slabs": [
+          {
+            "upTo": 250000,
+            "rate": 0.0
+          },
+          {
+            "upTo": 500000,
+            "rate": 0.05
+          },
+          {
+            "upTo": 1000000,
+            "rate": 0.2
+          },
+          {
+            "upTo": null,
+            "rate": 0.3
+          }
+        ],
+        "seniorSlabs": {
+          "60": [
+            {
+              "upTo": 300000,
+              "rate": 0.0
+            },
+            {
+              "upTo": 500000,
+              "rate": 0.05
+            },
+            {
+              "upTo": 1000000,
+              "rate": 0.2
+            },
+            {
+              "upTo": null,
+              "rate": 0.3
+            }
+          ],
+          "80": [
+            {
+              "upTo": 500000,
+              "rate": 0.0
+            },
+            {
+              "upTo": 1000000,
+              "rate": 0.2
+            },
+            {
+              "upTo": null,
+              "rate": 0.3
+            }
+          ]
+        },
+        "standardDeduction": 50000,
+        "rebate87A": {
+          "thresholdIncome": 500000,
+          "maxRebate": 12500,
+          "marginalRelief": false
+        },
+        "hraExemptionAllowed": true,
+        "section80cLimit": 150000,
+        "section80dLimits": {
+          "selfAndFamilyUnder60": 25000,
+          "selfAndFamily60OrAbove": 50000,
+          "parentsUnder60": 25000,
+          "parents60OrAbove": 50000
+        },
+        "section24bSelfOccupiedCap": 200000
+      }
+    },
+    "surcharge": {
+      "slabs": [
+        {
+          "above": 5000000,
+          "rate": 0.1
+        },
+        {
+          "above": 10000000,
+          "rate": 0.15
+        },
+        {
+          "above": 20000000,
+          "rate": 0.25
+        },
+        {
+          "above": 50000000,
+          "rate": 0.37
+        }
+      ],
+      "capitalGainsCap": 0.15,
+      "newRegimeCap": 0.25
+    },
+    "cess": 0.04,
+    "hra": {
+      "metroCities": [
+        "Delhi",
+        "Mumbai",
+        "Kolkata",
+        "Chennai"
+      ],
+      "metroRate": 0.5,
+      "nonMetroRate": 0.4
+    }
+  }
+}

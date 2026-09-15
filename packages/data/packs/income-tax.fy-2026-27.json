@@ -1,0 +1,203 @@
+{
+  "id": "income-tax.fy-2026-27",
+  "fy": "2026-27",
+  "jurisdiction": "IN",
+  "effectiveFrom": "2026-04-01",
+  "provenance": {
+    "source": "https://cleartax.in/s/income-tax-slabs",
+    "verifiedOn": "2026-09-15",
+    "note": "Anchor source for the slab tables, standard deduction, 87A rebate and surcharge structure, cross-checked against indiabudget.gov.in's Finance Bill memorandum and (for FY2026-27) the Income-tax Act 2025 statute text on indiankanoon.org — see citations for the entries sourced from those primaries directly."
+  },
+  "citations": {
+    "regimes.new.slabs": {
+      "source": "https://indiankanoon.org/doc/135805753/",
+      "verifiedOn": "2026-09-15",
+      "note": "Primary statute text: Section 202 of the Income-tax Act, 2025, in force from 1 April 2026, described there as 'similar to Section 115BAC' — same brackets, confirmed unchanged by Budget 2026 (Finance Act 2026 made no slab/rate changes; see https://www.businesstoday.in/personal-finance/tax/story/tax-slabs-fy-2026-27-what-budget-2026-changed-for-individual-taxpayers-and-which-regime-works-best-514044-2026-02-01 and https://cleartax.in/s/budget-2026-highlights)."
+    },
+    "regimes.new.standardDeduction": {
+      "source": "https://indiankanoon.org/doc/190801234/",
+      "verifiedOn": "2026-09-15",
+      "note": "Primary statute text: Section 19 of the Income-tax Act, 2025 — '₹75000 ... where tax is computed under section 202(1); ₹50000 ... in any other case'."
+    },
+    "regimes.new.rebate87A": {
+      "source": "https://www.aubsp.com/income-tax-act-2025-section-156/",
+      "verifiedOn": "2026-09-15",
+      "note": "Section 156 of the Income-tax Act, 2025 (renumbered from old Section 87A) — 156(1) old-regime-equivalent (₹12,500/₹5L), 156(2) new-regime-equivalent (₹60,000/₹12L with marginal relief). Figures unchanged from FY2025-26."
+    },
+    "regimes.old.section80cLimit": {
+      "source": "https://www.businesstoday.in/personal-finance/tax/story/income-tax-act-2025-section-80c-becomes-section-123-from-april-1-2026-heres-what-taxpayers-must-know-522120-2026-03-24",
+      "verifiedOn": "2026-09-15",
+      "note": "Section 80C renumbered to Section 123 of the Income-tax Act, 2025, from 1 April 2026 — limit unchanged at ₹1,50,000."
+    },
+    "regimes.old.section24bSelfOccupiedCap": {
+      "source": "https://indiankanoon.org/doc/26891583/",
+      "verifiedOn": "2026-09-15",
+      "note": "Primary statute text: Section 22 of the Income-tax Act, 2025 (renumbered from old 24(b)) — Section 22(2)(a) '₹200000' for a qualifying self-occupied property, aggregate cap ₹200,000 under 22(5)."
+    },
+    "surcharge.slabs": {
+      "source": "https://cleartax.in/s/marginal-relief-surcharge",
+      "verifiedOn": "2026-09-15",
+      "note": "Surcharge slabs/rates and the marginal-relief mechanism (excess tax vs excess income). Enhanced surcharge (25%/37%) is disapplied for dividend income and for gains taxed under 111A/112/112A (old Act) / 196/197/198 (new Act) — capped at 15% for those — see surcharge.capitalGainsCap."
+    },
+    "hra.metroCities": {
+      "source": "https://taxguru.in/income-tax/hra-exemption-8-cities-qualify-50-percent-exemption-practical-guide.html",
+      "verifiedOn": "2026-09-15",
+      "note": "OPEN QUESTION, not resolved: multiple secondary sources (TaxGuru, AngelOne, Greythr) report a draft CBDT Income-tax Rules 2026 'Rule 279' expanding the 50%-exemption metro list from 4 to 8 cities (adding Bengaluru, Hyderabad, Pune, Ahmedabad) for FY2026-27, but the sources reporting this explicitly label it 'Draft' as of publication and a direct fetch of the notified Rules (G.S.R. 198(E), 20 March 2026) could not locate the Rule 279 text to confirm finalisation. This pack conservatively keeps the confirmed 4-city list until the actual notified rule text is read — do not widen this to 8 cities without that confirmation."
+    },
+    "regimes.old.section80dLimits": {
+      "source": "https://taxgarden.in/blog/section-80d-health-insurance-deduction-ay-2026-27-india",
+      "verifiedOn": "2026-09-15",
+      "note": "Limits unchanged (₹25,000/₹50,000 by age, self and parents; ₹1,00,000 combined max). Reported renumbered to Section 126 of the Income-tax Act, 2025 — corroborated by two independent secondary sources but NOT verified against the bare statute text directly; the rupee limits themselves are not in doubt."
+    }
+  },
+  "rules": {
+    "regimes": {
+      "new": {
+        "actSection": "Section 202 (Income-tax Act, 2025)",
+        "slabs": [
+          {
+            "upTo": 400000,
+            "rate": 0.0
+          },
+          {
+            "upTo": 800000,
+            "rate": 0.05
+          },
+          {
+            "upTo": 1200000,
+            "rate": 0.1
+          },
+          {
+            "upTo": 1600000,
+            "rate": 0.15
+          },
+          {
+            "upTo": 2000000,
+            "rate": 0.2
+          },
+          {
+            "upTo": 2400000,
+            "rate": 0.25
+          },
+          {
+            "upTo": null,
+            "rate": 0.3
+          }
+        ],
+        "standardDeduction": 75000,
+        "rebate87A": {
+          "thresholdIncome": 1200000,
+          "maxRebate": 60000,
+          "marginalRelief": true
+        },
+        "hraExemptionAllowed": false,
+        "section80cLimit": null,
+        "section80dLimits": null,
+        "section24bSelfOccupiedCap": null
+      },
+      "old": {
+        "actSection": "Section 202 opt-out / Chapter equivalent (Income-tax Act, 2025) — old-regime computation continues as before under the new Act per incometax.gov.in guidance",
+        "slabs": [
+          {
+            "upTo": 250000,
+            "rate": 0.0
+          },
+          {
+            "upTo": 500000,
+            "rate": 0.05
+          },
+          {
+            "upTo": 1000000,
+            "rate": 0.2
+          },
+          {
+            "upTo": null,
+            "rate": 0.3
+          }
+        ],
+        "seniorSlabs": {
+          "60": [
+            {
+              "upTo": 300000,
+              "rate": 0.0
+            },
+            {
+              "upTo": 500000,
+              "rate": 0.05
+            },
+            {
+              "upTo": 1000000,
+              "rate": 0.2
+            },
+            {
+              "upTo": null,
+              "rate": 0.3
+            }
+          ],
+          "80": [
+            {
+              "upTo": 500000,
+              "rate": 0.0
+            },
+            {
+              "upTo": 1000000,
+              "rate": 0.2
+            },
+            {
+              "upTo": null,
+              "rate": 0.3
+            }
+          ]
+        },
+        "standardDeduction": 50000,
+        "rebate87A": {
+          "thresholdIncome": 500000,
+          "maxRebate": 12500,
+          "marginalRelief": false
+        },
+        "hraExemptionAllowed": true,
+        "section80cLimit": 150000,
+        "section80dLimits": {
+          "selfAndFamilyUnder60": 25000,
+          "selfAndFamily60OrAbove": 50000,
+          "parentsUnder60": 25000,
+          "parents60OrAbove": 50000
+        },
+        "section24bSelfOccupiedCap": 200000
+      }
+    },
+    "surcharge": {
+      "slabs": [
+        {
+          "above": 5000000,
+          "rate": 0.1
+        },
+        {
+          "above": 10000000,
+          "rate": 0.15
+        },
+        {
+          "above": 20000000,
+          "rate": 0.25
+        },
+        {
+          "above": 50000000,
+          "rate": 0.37
+        }
+      ],
+      "capitalGainsCap": 0.15,
+      "newRegimeCap": 0.25
+    },
+    "cess": 0.04,
+    "hra": {
+      "metroCities": [
+        "Delhi",
+        "Mumbai",
+        "Kolkata",
+        "Chennai"
+      ],
+      "metroRate": 0.5,
+      "nonMetroRate": 0.4
+    }
+  }
+}

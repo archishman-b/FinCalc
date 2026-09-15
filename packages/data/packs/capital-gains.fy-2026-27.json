@@ -1,0 +1,109 @@
+{
+  "id": "capital-gains.fy-2026-27",
+  "fy": "2026-27",
+  "jurisdiction": "IN",
+  "effectiveFrom": "2026-04-01",
+  "provenance": {
+    "source": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2036604&reg=48&lang=2",
+    "verifiedOn": "2026-09-15",
+    "note": "PIB/CBDT FAQ on the capital-gains regime introduced by Finance (No.2) Act 2024, effective for transfers on/after 23 July 2024 — the anchor for equity/property rates and thresholds in this pack, confirmed unchanged through Budget 2026 (https://www.angelone.in/news/taxation/union-budget-2026-ltcg-tax-unchanged-at-12-5-stt-on-commodity-futures-hiked). Section numbers below follow the Income-tax Act, 1961 for FY2025-26 and the Income-tax Act, 2025 (in force from 1 April 2026) for FY2026-27 — see citations for the renumbering source."
+  },
+  "citations": {
+    "equity.actSections": {
+      "source": "https://taxgarden.in/blog/income-tax-on-sale-of-listed-shares-stcg-ltcg-india-ay-2026-27",
+      "verifiedOn": "2026-09-15",
+      "note": "FY2026-27 is governed by the Income-tax Act, 2025 (in force from 1 April 2026): STCG under new Section 196 (was 111A), LTCG under new Section 198 (was 112A). Section index corroborated via a compiled statute index (https://a2ztaxcorp.net/wp-content/uploads/2026/04/IT_Act_2025_with_index.pdf) — titles/index confirmed, not the bare section text itself."
+    },
+    "debtFunds": {
+      "source": "https://cleartax.in/s/tax-on-debt-funds",
+      "verifiedOn": "2026-09-15",
+      "note": "Post-1-April-2023 units: entire gain taxed as STCG at slab rate regardless of holding period (Finance Act 2023). Pre-1-April-2023 ('grandfathered') units: LTCG at 12.5% WITHOUT indexation if held >24 months (indexation was removed for this category too by Budget 2024) — corrects an earlier assumption that grandfathered units retained indexation."
+    },
+    "property.transitionalOption": {
+      "source": "https://www.dpncindia.com/indexation-benefit-allowed-to-resident-individuals-huf-for-immovable-properties-acquired-before-23rd-july-2024",
+      "verifiedOn": "2026-09-15",
+      "note": "Resident individuals/HUFs selling land or a building acquired before 23 July 2024 may choose the lower of 12.5% (no indexation) or 20% (with indexation). Tied to acquisition date, not sale year — CBDT is still notifying the Cost Inflation Index for FY2026-27 (CII=384, Notification 85/2026) specifically because this group still needs it, which is the best available confirmation the option has no sunset yet. The exact statutory proviso text (India Code/egazette) was not independently pulled — this rests on consistent secondary-source reporting."
+    },
+    "reit": {
+      "source": "https://taxguru.in/income-tax/amendment-business-trust-taxation-section-115ua-budget-2025.html",
+      "verifiedOn": "2026-09-15",
+      "note": "Budget 2025 amended Section 115UA (now recast under the 2025 Act) to explicitly bring in Section 112A/198 alongside 111A/112 (196/197) for business-trust unit gains — read as extending the ₹1.25L annual LTCG exemption to REIT/InvIT units from FY2026-27 (AY2027-28) onward. Moderate confidence: the source's own effective-date wording is internally inconsistent (states 'AY 2026-27' while describing an April-2026 commencement), so the FY2026-27 attribution is this pack's best-supported reading, not a directly quoted effective date — flagged for confirmation against the Finance Act 2025 bare text. Separately, the Taxation and Other Laws (Amendment) Act 2026 (assent 17 Aug 2026, deemed effective 1 Apr 2026) exempts the REIT/InvIT *dividend* distribution component from unit-holder tax regardless of the SPV's regime election (raising the SPV-level surcharge to 25% instead) — a distribution-mechanics change for the Phase 3 REIT Position model, not a capital-gains-rate change, so not encoded in this pack's rules."
+    },
+    "section54EC.eligibleBonds": {
+      "source": "https://www.taxscan.in/hudco-bonds-now-eligible-for-capital-gains-tax-exemption-u-s-54ec-cbdt/505655",
+      "verifiedOn": "2026-09-15",
+      "note": "CBDT Notification No. 31/2025 [S.O. 1644(E)], 7 April 2025, added HUDCO bonds issued on/after 1 April 2025 (5-year redemption) alongside the pre-existing NHAI/REC/PFC/IRFC bonds. Continuity into new-Act Section 85 for FY2026-27 is inferred (no contrary evidence found), not directly confirmed."
+    }
+  },
+  "rules": {
+    "equity": {
+      "actSections": {
+        "stcg": "196 (Income-tax Act, 2025; was 111A)",
+        "ltcg": "198 (Income-tax Act, 2025; was 112A)"
+      },
+      "holdingPeriodMonthsForLtcg": 12,
+      "ltcgRate": 0.125,
+      "ltcgExemptionPerYear": 125000,
+      "stcgRate": 0.2
+    },
+    "debtFunds": {
+      "actSection": "76 (Income-tax Act, 2025; was 50AA)",
+      "slabTaxationAppliesFrom": "2023-04-01",
+      "specifiedFundDebtShareThreshold": 0.65,
+      "grandfatheredHoldingPeriodMonthsForLtcg": 24,
+      "grandfatheredLtcgRate": 0.125
+    },
+    "property": {
+      "actSections": {
+        "stcg": "Section 67 read with slab rate (Income-tax Act, 2025)",
+        "ltcg": "197 (Income-tax Act, 2025; was 112)"
+      },
+      "holdingPeriodMonthsForLtcg": 24,
+      "ltcgRateNoIndexation": 0.125,
+      "stcgTaxedAtSlabRate": true,
+      "transitionalOption": {
+        "acquiredBefore": "2024-07-23",
+        "rateWithIndexation": 0.2,
+        "eligibleTaxpayers": [
+          "resident_individual",
+          "resident_huf"
+        ]
+      }
+    },
+    "reit": {
+      "holdingPeriodMonthsForLtcg": 12,
+      "ltcgRate": 0.125,
+      "ltcgExemptionPerYear": 125000,
+      "stcgRate": 0.2
+    },
+    "section54": {
+      "actSection": "82 (Income-tax Act, 2025; was 54)",
+      "capOnGainsConsidered": 100000000,
+      "purchaseWindowMonthsBefore": 12,
+      "purchaseWindowMonthsAfter": 24,
+      "constructionWindowMonthsAfter": 36,
+      "twoHouseExceptionGainsCap": 20000000
+    },
+    "section54F": {
+      "actSection": "86 (Income-tax Act, 2025; was 54F)",
+      "capOnGainsConsidered": 100000000,
+      "purchaseWindowMonthsBefore": 12,
+      "purchaseWindowMonthsAfter": 24,
+      "constructionWindowMonthsAfter": 36,
+      "maxOtherResidentialHousesOwned": 1
+    },
+    "section54EC": {
+      "actSection": "85 (Income-tax Act, 2025; was 54EC)",
+      "investmentCap": 5000000,
+      "lockInMonths": 60,
+      "investmentWindowMonths": 6,
+      "eligibleBonds": [
+        "NHAI",
+        "REC",
+        "PFC",
+        "IRFC",
+        "HUDCO"
+      ]
+    }
+  }
+}
