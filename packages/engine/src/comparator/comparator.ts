@@ -123,7 +123,7 @@ export function computeOwnMonthlyOutflow(
  * household-tax.ts uses for `loanAmortization`) and fills the cost basis
  * in automatically unless the caller already supplied one explicitly.
  */
-function resolveExitConfigWithReitCostBasis(
+export function resolveExitConfigWithReitCostBasis(
   position: Position,
   config: ExitConfig | undefined,
   ctx: MarketContext,

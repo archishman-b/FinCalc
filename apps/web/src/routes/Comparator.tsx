@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { formatINR } from '@fincalc/ui';
 
 import { Amount } from '../components/Amount';
+import { MonteCarloPanel } from '../components/MonteCarloPanel';
 import { ResultChart } from '../components/ResultChart';
 import {
   buildLayerOneComparison,
@@ -10,6 +11,7 @@ import {
   HORIZON_OPTIONS,
   SUPPORTED_CITIES,
   type HorizonYears,
+  type LayerOneInputs,
   type LayerOneResult,
 } from '../lib/scenario-builder';
 import { navigate } from '../lib/router';
@@ -25,21 +27,21 @@ export function Comparator() {
   // side effect: buildLayerOneComparison can throw on degenerate inputs (see
   // its own RangeError guards), and deriving both the success and failure
   // case from one memo keeps this a pure render-time computation.
+  const layerOneInputs = useMemo<LayerOneInputs>(
+    () => ({ city: 'hyderabad', monthlyHouseholdIncomeNet: monthlyIncome, monthlyHousingBudget: monthlyBudget, horizonYears }),
+    [monthlyIncome, monthlyBudget, horizonYears],
+  );
+
   const outcome = useMemo<{ ok: true; value: LayerOneResult } | { ok: false; error: string } | null>(() => {
     if (!submitted) return null;
     try {
-      const value = buildLayerOneComparison({
-        city: 'hyderabad',
-        monthlyHouseholdIncomeNet: monthlyIncome,
-        monthlyHousingBudget: monthlyBudget,
-        horizonYears,
-      });
+      const value = buildLayerOneComparison(layerOneInputs);
       return { ok: true, value };
     } catch (e) {
       const message = e instanceof Error ? e.message : "Something about these numbers didn't compute. Try different values.";
       return { ok: false, error: message };
     }
-  }, [submitted, monthlyIncome, monthlyBudget, horizonYears]);
+  }, [submitted, layerOneInputs]);
 
   const layerOne = outcome?.ok ? outcome.value : null;
   const error = outcome && !outcome.ok ? outcome.error : null;
@@ -143,7 +145,9 @@ export function Comparator() {
         </p>
       )}
 
-      {layerOne && <ComparatorResult layerOne={layerOne} hurdleText={hurdle} horizonYears={horizonYears} />}
+      {layerOne && (
+        <ComparatorResult layerOne={layerOne} hurdleText={hurdle} horizonYears={horizonYears} layerOneInputs={layerOneInputs} />
+      )}
 
       <footer className="mt-16 max-w-md space-y-1 text-sm text-ink-muted">
         <p>Runs entirely in your browser. No backend, no accounts, nothing you enter leaves this page.</p>
@@ -157,10 +161,12 @@ function ComparatorResult({
   layerOne,
   hurdleText,
   horizonYears,
+  layerOneInputs,
 }: {
   layerOne: LayerOneResult;
   hurdleText: ReturnType<typeof computeHurdleSentence> | null;
   horizonYears: HorizonYears;
+  layerOneInputs: LayerOneInputs;
 }) {
   const { result } = layerOne;
 
@@ -237,6 +243,9 @@ function ComparatorResult({
           </tbody>
         </table>
       </div>
+
+      {/* 4. Sensitivity (tornado) and Monte Carlo distribution — Phase 7 (brief §3/§6). */}
+      <MonteCarloPanel layerOne={layerOne} layerOneInputs={layerOneInputs} horizonYears={horizonYears} />
 
       {/* A lightweight version of the Assumptions panel — the full Layer 2 drawer is a later phase, but nothing here is hidden. */}
       <div className="rounded-sm border border-hairline px-4 py-4 text-sm text-ink-muted">
