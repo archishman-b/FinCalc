@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getCapitalGainsRules,
   getCostInflationIndexRules,
+  getFixedIncomeRules,
   getIncomeTaxRules,
   getReitDistributionRules,
   getRulePack,
@@ -52,9 +53,9 @@ describe('@fincalc/data rule-pack envelope', () => {
 });
 
 describe('@fincalc/data shipped packs (Phase 2: income-tax and capital-gains)', () => {
-  it('ships eight packs — income-tax, capital-gains and reit-distributions for FY2026-27/FY2025-26, plus the cost-inflation-index and stamp-duty tables — and every one validates', () => {
+  it('ships nine packs — income-tax, capital-gains and reit-distributions for FY2026-27/FY2025-26, plus the cost-inflation-index, stamp-duty and fixed-income tables — and every one validates', () => {
     const packs = listRulePacks();
-    expect(packs).toHaveLength(8);
+    expect(packs).toHaveLength(9);
     for (const pack of packs) expect(() => parseRulePack(pack)).not.toThrow();
   });
 
@@ -161,5 +162,27 @@ describe('@fincalc/data shipped packs (Phase 2: income-tax and capital-gains)', 
 
   it('getReitDistributionRules throws for an FY with no reit-distributions pack', () => {
     expect(() => getReitDistributionRules('2019-20')).toThrow(RangeError);
+  });
+
+  it('getFixedIncomeRules returns every shipped small-savings/EPF/VPF product, each with a valid rate and citation', () => {
+    const rules = getFixedIncomeRules();
+    const expectedProducts = ['ppf', 'ssy', 'nsc', 'kvp', 'scss', 'pomis', 'potd_1y', 'potd_2y', 'potd_3y', 'potd_5y', 'pord', 'posa', 'epf', 'vpf'];
+    for (const id of expectedProducts) {
+      expect(rules.products[id]).toBeDefined();
+      expect(rules.products[id]!.rate).toBeGreaterThan(0);
+      expect(rules.products[id]!.rate).toBeLessThan(0.2);
+    }
+  });
+
+  it('getFixedIncomeRules: VPF earns the same rate as EPF, as documented', () => {
+    const rules = getFixedIncomeRules();
+    expect(rules.products.vpf!.rate).toBe(rules.products.epf!.rate);
+  });
+
+  it('getFixedIncomeRules: only the 5-year Post Office Time Deposit is Section 80C eligible', () => {
+    const rules = getFixedIncomeRules();
+    expect(rules.products.potd_5y!.section80C).toBe(true);
+    expect(rules.products.potd_1y!.section80C).toBe(false);
+    expect(rules.products.potd_3y!.section80C).toBe(false);
   });
 });

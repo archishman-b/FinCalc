@@ -1,0 +1,1 @@
+function e(e){return e/12}export{e as t};

@@ -1,0 +1,279 @@
+{
+  "id": "fixed-income",
+  "fy": "2026-27",
+  "jurisdiction": "IN",
+  "effectiveFrom": "2026-07-01",
+  "provenance": {
+    "source": "https://upstox.com/news/personal-finance/investing/small-savings-scheme-interest-rates-july-september-2026-live-updates/liveblog-196130/",
+    "verifiedOn": "2026-09-15",
+    "note": "Small-savings rates are the Jul-Sep 2026 (Q2 FY2026-27) quarter, per Ministry of Finance notification dated 30 June 2026, unchanged for the ninth consecutive quarter — the Oct-Dec 2026 notification was not yet issued as of this pack's verification date (typically issued around 30 September). EPF/VPF are the FY2025-26 EPFO-ratified rate, the latest declared at verification time (see per-entry citation). Every product's rate is cited individually below since they come from separate (if related) notifications and declaration cycles, following the same citations pattern as the income-tax and stamp-duty packs."
+  },
+  "citations": {
+    "products.ppf.rate": {
+      "source": "https://upstox.com/news/personal-finance/investing/small-savings-scheme-interest-rates-july-september-2026-live-updates/liveblog-196130/",
+      "verifiedOn": "2026-09-15",
+      "note": "7.1% for Jul-Sep 2026 (Q2 FY2026-27), per Ministry of Finance notification dated 30 June 2026, unchanged for the ninth consecutive quarter. Cross-checked against newsonair.gov.in (Government of India's own news agency)."
+    },
+    "products.ssy.rate": {
+      "source": "https://upstox.com/news/personal-finance/investing/small-savings-scheme-interest-rates-july-september-2026-live-updates/liveblog-196130/",
+      "verifiedOn": "2026-09-15",
+      "note": "8.2% for Jul-Sep 2026, same notification as PPF above."
+    },
+    "products.nsc.rate": {
+      "source": "https://upstox.com/news/personal-finance/investing/small-savings-scheme-interest-rates-july-september-2026-live-updates/liveblog-196130/",
+      "verifiedOn": "2026-09-15",
+      "note": "7.7% for Jul-Sep 2026, same notification."
+    },
+    "products.kvp.rate": {
+      "source": "https://cleartax.in/s/kisan-vikas-patra",
+      "verifiedOn": "2026-09-15",
+      "note": "7.5% and the 115-month/2.5-year-lock-in figures cross-checked against the same Jul-Sep 2026 Ministry of Finance notification (via Upstox) as the other small-savings products; the 115-month doubling period independently reproduced by this project's own `yearsToDouble(0.075)` calculation (≈115.01 months), confirming the cited figure rather than trusting it blind."
+    },
+    "products.scss.rate": {
+      "source": "https://upstox.com/news/personal-finance/investing/small-savings-scheme-interest-rates-july-september-2026-live-updates/liveblog-196130/",
+      "verifiedOn": "2026-09-15",
+      "note": "8.2% for Jul-Sep 2026, same notification as PPF above."
+    },
+    "products.pomis.rate": {
+      "source": "https://upstox.com/news/personal-finance/investing/small-savings-scheme-interest-rates-july-september-2026-live-updates/liveblog-196130/",
+      "verifiedOn": "2026-09-15",
+      "note": "7.4% for Jul-Sep 2026, same notification."
+    },
+    "products.potd_1y.rate": {
+      "source": "https://upstox.com/news/personal-finance/investing/post-office-time-deposit-rate-for-july-september-2026/article-196143/",
+      "verifiedOn": "2026-09-15",
+      "note": "6.9% for Jul-Sep 2026, per the same 30 June 2026 Ministry of Finance notification."
+    },
+    "products.potd_2y.rate": {
+      "source": "https://upstox.com/news/personal-finance/investing/post-office-time-deposit-rate-for-july-september-2026/article-196143/",
+      "verifiedOn": "2026-09-15",
+      "note": "7.0% for Jul-Sep 2026, same notification."
+    },
+    "products.potd_3y.rate": {
+      "source": "https://upstox.com/news/personal-finance/investing/post-office-time-deposit-rate-for-july-september-2026/article-196143/",
+      "verifiedOn": "2026-09-15",
+      "note": "7.1% for Jul-Sep 2026, same notification."
+    },
+    "products.potd_5y.rate": {
+      "source": "https://upstox.com/news/personal-finance/investing/post-office-time-deposit-rate-for-july-september-2026/article-196143/",
+      "verifiedOn": "2026-09-15",
+      "note": "7.5% for Jul-Sep 2026, same notification."
+    },
+    "products.pord.rate": {
+      "source": "https://upstox.com/news/personal-finance/investing/small-savings-scheme-interest-rates-july-september-2026-live-updates/liveblog-196130/",
+      "verifiedOn": "2026-09-15",
+      "note": "6.7% for Jul-Sep 2026, same notification as PPF above."
+    },
+    "products.posa.rate": {
+      "source": "https://upstox.com/news/personal-finance/investing/small-savings-scheme-interest-rates-july-september-2026-live-updates/liveblog-196130/",
+      "verifiedOn": "2026-09-15",
+      "note": "4.0% for Jul-Sep 2026, same notification; this rate has been unchanged for many years independent of the quarterly small-savings cycle."
+    },
+    "products.epf.rate": {
+      "source": "https://newsonair.gov.in/epfo-notifies-8-25-interest-rate-on-epf-deposits-for-fy-2025-26/",
+      "verifiedOn": "2026-09-15",
+      "note": "8.25% ratified and notified for FY2025-26 — the latest EPFO-declared rate at verification time. FY2026-27's rate is declared only after that year ends, so this figure is one year behind the small-savings quarter above by the nature of EPFO's own declaration cycle, not an oversight."
+    },
+    "products.vpf.rate": {
+      "source": "https://cleartax.in/s/voluntary-provident-fund",
+      "verifiedOn": "2026-09-15",
+      "note": "VPF earns the same rate as EPF by rule (deposits sit in the same account) — not an independently notified figure."
+    }
+  },
+  "rules": {
+    "products": {
+      "ppf": {
+        "label": "Public Provident Fund (PPF)",
+        "rate": 0.071,
+        "compounding": "annual",
+        "contributionMode": "recurring_annual",
+        "tenureYears": 15,
+        "lockInYears": 15,
+        "minContribution": 500,
+        "maxContributionPerYear": 150000,
+        "taxTreatment": "eee",
+        "section80C": true,
+        "eligibility": "Any resident Indian individual (including a minor's account operated by a guardian); NRIs cannot open new accounts.",
+        "notes": "Interest is calculated monthly on the lowest balance between the 5th and last day of the month, but credited to the account only once a year (31 March) — this pack ships the annual rate and the engine models a simplified once-a-year contribution/compounding cycle (deposit before 5 April each year to earn the full year's interest, standard PPF advice). Partial withdrawal allowed from the 7th financial year; loan against balance available from the 3rd to 6th year. Extendable in blocks of 5 years after the initial 15."
+      },
+      "ssy": {
+        "label": "Sukanya Samriddhi Yojana (SSY)",
+        "rate": 0.082,
+        "compounding": "annual",
+        "contributionMode": "recurring_annual",
+        "tenureYears": 15,
+        "lockInYears": 21,
+        "minContribution": 250,
+        "maxContributionPerYear": 150000,
+        "taxTreatment": "eee",
+        "section80C": true,
+        "eligibility": "A girl child under 10 years of age at account opening, one account per girl (max two per family, three in the case of twins/triplets on the second birth).",
+        "notes": "Contributions may be made for 15 years from account opening; the account itself matures 21 years from opening, or on the girl's marriage after age 18, whichever is earlier — so the balance keeps earning interest (undisbursed) between year 15 and maturity even though contributions have stopped. This pack's engine wiring assumes the horizon requested is within the 15-year contribution window; a longer horizon needs the balance to be carried forward at the same rate with zero further contribution, not modelled by `compoundAnnualContributions` alone."
+      },
+      "nsc": {
+        "label": "National Savings Certificate (NSC)",
+        "rate": 0.077,
+        "compounding": "annual",
+        "contributionMode": "lumpsum",
+        "tenureYears": 5,
+        "lockInYears": 5,
+        "minContribution": 1000,
+        "maxContributionPerYear": null,
+        "taxTreatment": "interest_taxable",
+        "section80C": true,
+        "eligibility": "Any resident Indian individual; no NRI eligibility.",
+        "notes": "Interest compounds annually but is paid out only at maturity (5 years), not annually. Interest for years 1-4 is deemed reinvested and itself qualifies for a fresh Section 80C deduction each year (subject to the overall ₹1.5L cap); the final year's interest is taxable with no offsetting fresh deduction since the certificate matures. No premature-withdrawal option except on the holder's death or by court order."
+      },
+      "kvp": {
+        "label": "Kisan Vikas Patra (KVP)",
+        "rate": 0.075,
+        "compounding": "annual",
+        "contributionMode": "lumpsum",
+        "tenureYears": 9.583333333333334,
+        "lockInYears": 2.5,
+        "minContribution": 1000,
+        "maxContributionPerYear": null,
+        "taxTreatment": "interest_taxable",
+        "section80C": false,
+        "eligibility": "Any resident Indian individual; no NRI eligibility.",
+        "notes": "Maturity period is the doubling period implied by the shipped rate (115 months ≈ 9 years 5 months at 7.5%, matching the officially cited figure — see the engine's `yearsToDouble` helper, which derives this from the rate rather than shipping a separately-sourced period that could drift out of sync with it). Premature encashment is not permitted before 30 months (2.5 years) except on the holder's death, forfeiture by a pledgee, or court order. TDS of 10% is deducted annually on accrued interest even though it is paid only at maturity."
+      },
+      "scss": {
+        "label": "Senior Citizen Savings Scheme (SCSS)",
+        "rate": 0.082,
+        "compounding": "quarterly",
+        "contributionMode": "lumpsum",
+        "tenureYears": 5,
+        "lockInYears": 5,
+        "minContribution": 1000,
+        "maxContributionPerYear": 3000000,
+        "taxTreatment": "interest_taxable",
+        "section80C": true,
+        "eligibility": "Individuals aged 60+ (55+ for retired defence personnel, 50+ for retired civilian employees under superannuation/VRS, subject to deposit-timing conditions).",
+        "notes": "Interest is paid out quarterly, not compounded back into the balance — this pack ships the annual rate; a caller projecting SCSS should treat it as an income stream (quarterly payout) rather than feeding it through `compoundAnnually`, since it doesn't compound. Extendable once by 3 years after the initial 5-year maturity. ₹30L combined per individual across all SCSS accounts."
+      },
+      "pomis": {
+        "label": "Post Office Monthly Income Scheme (POMIS)",
+        "rate": 0.074,
+        "compounding": "monthly",
+        "contributionMode": "lumpsum",
+        "tenureYears": 5,
+        "lockInYears": 5,
+        "minContribution": 1000,
+        "maxContributionPerYear": 1500000,
+        "taxTreatment": "interest_taxable",
+        "section80C": false,
+        "eligibility": "Any resident Indian individual; joint accounts (up to 3 holders) permitted.",
+        "notes": "Interest is paid out monthly, not compounded — an income stream, same treatment note as SCSS above. ₹9L max for a single account, ₹15L for a joint account (each joint holder's individual-account limit is reduced by their proportional joint-account share)."
+      },
+      "potd_1y": {
+        "label": "Post Office Time Deposit — 1 year",
+        "rate": 0.069,
+        "compounding": "quarterly",
+        "contributionMode": "lumpsum",
+        "tenureYears": 1,
+        "lockInYears": 0.5,
+        "minContribution": 1000,
+        "maxContributionPerYear": null,
+        "taxTreatment": "interest_taxable",
+        "section80C": false,
+        "notes": "Interest compounds quarterly but is payable annually. Premature closure allowed after 6 months at a reduced rate (Post Office Savings Account rate for a 6-11 month holding)."
+      },
+      "potd_2y": {
+        "label": "Post Office Time Deposit — 2 year",
+        "rate": 0.07,
+        "compounding": "quarterly",
+        "contributionMode": "lumpsum",
+        "tenureYears": 2,
+        "lockInYears": 0.5,
+        "minContribution": 1000,
+        "maxContributionPerYear": null,
+        "taxTreatment": "interest_taxable",
+        "section80C": false,
+        "notes": "Same premature-closure and compounding rules as the 1-year Time Deposit."
+      },
+      "potd_3y": {
+        "label": "Post Office Time Deposit — 3 year",
+        "rate": 0.071,
+        "compounding": "quarterly",
+        "contributionMode": "lumpsum",
+        "tenureYears": 3,
+        "lockInYears": 0.5,
+        "minContribution": 1000,
+        "maxContributionPerYear": null,
+        "taxTreatment": "interest_taxable",
+        "section80C": false,
+        "notes": "Same premature-closure and compounding rules as the 1-year Time Deposit."
+      },
+      "potd_5y": {
+        "label": "Post Office Time Deposit — 5 year",
+        "rate": 0.075,
+        "compounding": "quarterly",
+        "contributionMode": "lumpsum",
+        "tenureYears": 5,
+        "lockInYears": 0.5,
+        "minContribution": 1000,
+        "maxContributionPerYear": null,
+        "taxTreatment": "interest_taxable",
+        "section80C": true,
+        "notes": "Only the 5-year Time Deposit qualifies for Section 80C. Used as this calculator's sourced default for a generic bank FD — a real bank's own FD rate varies by bank and tenure and should be entered directly by the user when known; this is a government-backed reference point, not a claim that every bank offers 7.5%."
+      },
+      "pord": {
+        "label": "Post Office Recurring Deposit (RD)",
+        "rate": 0.067,
+        "compounding": "quarterly",
+        "contributionMode": "recurring_monthly",
+        "tenureYears": 5,
+        "lockInYears": 3,
+        "minContribution": 100,
+        "maxContributionPerYear": null,
+        "taxTreatment": "interest_taxable",
+        "section80C": false,
+        "notes": "Quarterly compounding on a monthly contribution stream; this pack's engine wiring approximates it via the existing monthly-nominal-rate SIP machinery (`compoundContributions`/`sipFutureValue` in compounding.ts) rather than modelling the exact quarterly-credit mechanics — a documented simplification, immaterial at these rates over realistic horizons. Premature closure allowed after 3 years at the Post Office Savings Account rate."
+      },
+      "posa": {
+        "label": "Post Office Savings Account (POSA)",
+        "rate": 0.04,
+        "compounding": "annual",
+        "contributionMode": "flexible",
+        "tenureYears": null,
+        "lockInYears": 0,
+        "minContribution": 500,
+        "maxContributionPerYear": null,
+        "taxTreatment": "interest_taxable",
+        "section80C": false,
+        "notes": "Interest up to ₹10,000/year is exempt under Section 80TTA (old regime, non-senior); shown here as the gross rate, with the exemption left to the income-tax calculator rather than modelled inside this pack."
+      },
+      "epf": {
+        "label": "Employees' Provident Fund (EPF)",
+        "rate": 0.0825,
+        "compounding": "annual",
+        "contributionMode": "recurring_monthly",
+        "tenureYears": null,
+        "lockInYears": 5,
+        "minContribution": null,
+        "maxContributionPerYear": null,
+        "taxTreatment": "interest_taxable_above_threshold",
+        "taxableInterestThresholdPerYear": 250000,
+        "section80C": true,
+        "eligibility": "Salaried employees of an establishment covered under the EPF & MP Act, 1952 (mandatory above a headcount threshold; employee's own 12% contribution is mandatory once covered).",
+        "notes": "Rate shown is for FY2025-26, the latest EPFO-ratified figure at the time this pack was verified — the FY2026-27 rate had not yet been declared (EPFO typically declares a financial year's rate only after it ends). Mandatory employee contribution is 12% of basic + dearness allowance; the employer matches 12%, of which 8.33% (capped to a ₹15,000/month wage ceiling) is diverted to the Employees' Pension Scheme (EPS) rather than compounding in the EPF account — this pack's `rate` and engine wiring model only the EPF corpus itself, not EPS. EEE if the employee completes 5 years of continuous service (across employers, if transferred via UAN); interest on the employee's own contribution above ₹2.5L/year (₹5L/year if the employer makes no contribution at all) is taxable — modelled via `taxableInterestThresholdPerYear`, not yet wired into the income-tax engine as of Phase 6."
+      },
+      "vpf": {
+        "label": "Voluntary Provident Fund (VPF)",
+        "rate": 0.0825,
+        "compounding": "annual",
+        "contributionMode": "recurring_monthly",
+        "tenureYears": null,
+        "lockInYears": 5,
+        "minContribution": null,
+        "maxContributionPerYear": null,
+        "taxTreatment": "interest_taxable_above_threshold",
+        "taxableInterestThresholdPerYear": 250000,
+        "section80C": true,
+        "eligibility": "Any employee already covered by EPF, as a voluntary top-up beyond the mandatory 12%.",
+        "notes": "Earns the same rate as EPF by rule, since VPF deposits sit in the same EPF account — not an independently notified rate. The ₹2.5L/year taxable-interest threshold is combined across EPF + VPF employee contributions together, not ₹2.5L each. Same 5-year continuous-service condition for tax-free withdrawal as EPF; the employee cannot withdraw VPF independently of EPF."
+      }
+    }
+  }
+}

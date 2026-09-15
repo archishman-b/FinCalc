@@ -9,9 +9,36 @@
  */
 import { useEffect, useState } from 'react';
 
-export type RouteId = 'home' | 'afford' | 'rent-vs-buy' | 'comparator' | 'retirement' | 'calculators';
+export type RouteId =
+  | 'home'
+  | 'afford'
+  | 'rent-vs-buy'
+  | 'comparator'
+  | 'retirement'
+  | 'calculators'
+  | 'calc-emi'
+  | 'calc-loan-refinance'
+  | 'calc-sip'
+  | 'calc-fixed-income'
+  | 'calc-income-tax'
+  | 'calc-capital-gains'
+  | 'calc-inflation';
 
-const VALID_ROUTES: readonly RouteId[] = ['home', 'afford', 'rent-vs-buy', 'comparator', 'retirement', 'calculators'];
+const VALID_ROUTES: readonly RouteId[] = [
+  'home',
+  'afford',
+  'rent-vs-buy',
+  'comparator',
+  'retirement',
+  'calculators',
+  'calc-emi',
+  'calc-loan-refinance',
+  'calc-sip',
+  'calc-fixed-income',
+  'calc-income-tax',
+  'calc-capital-gains',
+  'calc-inflation',
+];
 
 function isRouteId(value: string): value is RouteId {
   return (VALID_ROUTES as readonly string[]).includes(value);

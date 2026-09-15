@@ -10,11 +10,36 @@ import { useRoute } from './lib/router';
 // phone even before anyone picks a door.
 const Comparator = lazy(() => import('./routes/Comparator').then((m) => ({ default: m.Comparator })));
 
+// The Tier 1 grid and its eight calculators (Phase 6) are a second
+// code-split boundary — none of them need recharts, but there's no reason
+// to ship eight calculators' worth of JS to someone who only ever opens
+// the flagship Comparator, or vice versa.
+const Tier1Grid = lazy(() => import('./routes/tier1/Tier1Grid').then((m) => ({ default: m.Tier1Grid })));
+const EmiCalculator = lazy(() => import('./routes/tier1/EmiCalculator').then((m) => ({ default: m.EmiCalculator })));
+const LoanRefinance = lazy(() => import('./routes/tier1/LoanRefinance').then((m) => ({ default: m.LoanRefinance })));
+const RentVsBuy = lazy(() => import('./routes/tier1/RentVsBuy').then((m) => ({ default: m.RentVsBuy })));
+const SipCalculator = lazy(() => import('./routes/tier1/SipCalculator').then((m) => ({ default: m.SipCalculator })));
+const FixedIncomeCalculator = lazy(() =>
+  import('./routes/tier1/FixedIncomeCalculator').then((m) => ({ default: m.FixedIncomeCalculator })),
+);
+const IncomeTaxCalculator = lazy(() =>
+  import('./routes/tier1/IncomeTaxCalculator').then((m) => ({ default: m.IncomeTaxCalculator })),
+);
+const CapitalGainsCalculator = lazy(() =>
+  import('./routes/tier1/CapitalGainsCalculator').then((m) => ({ default: m.CapitalGainsCalculator })),
+);
+const InflationCalculator = lazy(() =>
+  import('./routes/tier1/InflationCalculator').then((m) => ({ default: m.InflationCalculator })),
+);
+
+const LOADING = <div className="px-5 py-10 text-ink-muted sm:px-8">Loading…</div>;
+
 /**
- * Phase 5 shell: the entry router (brief §4's five doors) plus the Layer-1
- * flow for door 3, the flagship Allocation Comparator. The other four
- * doors get an honest "this phase is coming" state rather than a dead
- * link — see routes/ComingSoon.tsx.
+ * Phase 5 shipped the shell, the entry router and the flagship Comparator.
+ * Phase 6 adds the Tier 1 grid (door 5) and its eight calculators — see
+ * routes/tier1/. Doors 1 and 4 (affordability, retirement/FIRE) remain
+ * ComingSoon; door 2 (rent vs buy) and door 5's "Rent vs Buy" card both
+ * now point at the same real route.
  */
 export function App() {
   const route = useRoute();
@@ -23,13 +48,56 @@ export function App() {
     <div className="min-h-dvh bg-paper text-ink">
       {route === 'home' && <Home />}
       {route === 'comparator' && (
-        <Suspense fallback={<div className="px-5 py-10 text-ink-muted sm:px-8">Loading…</div>}>
+        <Suspense fallback={LOADING}>
           <Comparator />
         </Suspense>
       )}
-      {(route === 'afford' || route === 'rent-vs-buy' || route === 'retirement' || route === 'calculators') && (
-        <ComingSoon route={route} />
+      {route === 'rent-vs-buy' && (
+        <Suspense fallback={LOADING}>
+          <RentVsBuy />
+        </Suspense>
       )}
+      {route === 'calculators' && (
+        <Suspense fallback={LOADING}>
+          <Tier1Grid />
+        </Suspense>
+      )}
+      {route === 'calc-emi' && (
+        <Suspense fallback={LOADING}>
+          <EmiCalculator />
+        </Suspense>
+      )}
+      {route === 'calc-loan-refinance' && (
+        <Suspense fallback={LOADING}>
+          <LoanRefinance />
+        </Suspense>
+      )}
+      {route === 'calc-sip' && (
+        <Suspense fallback={LOADING}>
+          <SipCalculator />
+        </Suspense>
+      )}
+      {route === 'calc-fixed-income' && (
+        <Suspense fallback={LOADING}>
+          <FixedIncomeCalculator />
+        </Suspense>
+      )}
+      {route === 'calc-income-tax' && (
+        <Suspense fallback={LOADING}>
+          <IncomeTaxCalculator />
+        </Suspense>
+      )}
+      {route === 'calc-capital-gains' && (
+        <Suspense fallback={LOADING}>
+          <CapitalGainsCalculator />
+        </Suspense>
+      )}
+      {route === 'calc-inflation' && (
+        <Suspense fallback={LOADING}>
+          <InflationCalculator />
+        </Suspense>
+      )}
+      {(route === 'afford' || route === 'retirement') && <ComingSoon route={route} />}
     </div>
   );
 }

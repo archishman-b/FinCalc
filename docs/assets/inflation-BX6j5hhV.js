@@ -1,0 +1,1 @@
+import{t as e}from"./rates-c4fnEXKh.js";function t(e,t){return(1+e)/(1+t)-1}function n(t,n,r){if(r<0)throw RangeError(`presentValue: months must be non-negative, got ${r}`);return t/(1+e(n))**+r}function r(e,t,r){return n(e,t,r)}export{t as n,r as t};

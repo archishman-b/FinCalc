@@ -1,5 +1,6 @@
 import { CapitalGainsRules } from './capital-gains';
 import { CostInflationIndexRules } from './cost-inflation-index';
+import { FixedIncomeRules } from './fixed-income';
 import { IncomeTaxRules } from './income-tax';
 import { ReitDistributionRules } from './reit-distributions';
 import { RulePackEnvelope } from './schema';
@@ -9,6 +10,7 @@ export * from './schema';
 export * from './income-tax';
 export * from './capital-gains';
 export * from './cost-inflation-index';
+export * from './fixed-income';
 export * from './stamp-duty';
 export * from './reit-distributions';
 
@@ -22,6 +24,7 @@ import capitalGainsFy2026_27 from '../packs/capital-gains.fy-2026-27.json';
 import capitalGainsFy2025_26 from '../packs/capital-gains.fy-2025-26.json';
 import costInflationIndex from '../packs/cost-inflation-index.json';
 import stampDuty from '../packs/stamp-duty.json';
+import fixedIncome from '../packs/fixed-income.json';
 import reitDistributionsFy2026_27 from '../packs/reit-distributions.fy-2026-27.json';
 import reitDistributionsFy2025_26 from '../packs/reit-distributions.fy-2025-26.json';
 
@@ -32,6 +35,7 @@ const registry: readonly RulePackEnvelope[] = [
   RulePackEnvelope.parse(capitalGainsFy2025_26),
   RulePackEnvelope.parse(costInflationIndex),
   RulePackEnvelope.parse(stampDuty),
+  RulePackEnvelope.parse(fixedIncome),
   RulePackEnvelope.parse(reitDistributionsFy2026_27),
   RulePackEnvelope.parse(reitDistributionsFy2025_26),
 ];
@@ -82,4 +86,11 @@ export function getReitDistributionRules(fy: string): ReitDistributionRules {
   const pack = registry.find((p) => p.fy === fy && p.id.startsWith('reit-distributions.'));
   if (!pack) throw new RangeError(`getReitDistributionRules: no reit-distributions pack registered for FY ${fy}`);
   return ReitDistributionRules.parse(pack.rules);
+}
+
+/** Validates and returns the single fixed-income (small-savings/EPF/VPF) rate pack. Throws if the pack is missing. */
+export function getFixedIncomeRules(): FixedIncomeRules {
+  const pack = registry.find((p) => p.id === 'fixed-income');
+  if (!pack) throw new RangeError('getFixedIncomeRules: fixed-income pack not registered');
+  return FixedIncomeRules.parse(pack.rules);
 }

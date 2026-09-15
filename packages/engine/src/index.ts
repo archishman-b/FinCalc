@@ -2,6 +2,7 @@ export * from './types';
 export * from './rates';
 export * from './amortization';
 export * from './compounding';
+export * from './fixed-income';
 export * from './xirr';
 export * from './inflation';
 export * from './tax';
