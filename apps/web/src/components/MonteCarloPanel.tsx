@@ -155,7 +155,7 @@ export function MonteCarloPanel({ layerOne, layerOneInputs, horizonYears }: Mont
                     color: palette.ink,
                   }}
                 />
-                <Bar dataKey="swing" radius={[0, 2, 2, 0]}>
+                <Bar isAnimationActive={false} dataKey="swing" radius={[0, 2, 2, 0]}>
                   {tornado.map((bar) => (
                     <Cell key={bar.key} fill={bar.scenarioName === buyScenario.name ? palette.rust : palette.moss} />
                   ))}

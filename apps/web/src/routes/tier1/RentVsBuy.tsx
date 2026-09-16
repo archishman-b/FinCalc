@@ -4,6 +4,7 @@ import { formatINR } from '@fincalc/ui';
 
 import { Amount } from '../../components/Amount';
 import { Callout, CalcShell, NumberField, SubmitButton } from '../../components/CalcShell';
+import { ResultChart } from '../../components/ResultChart';
 import { buildLayerOneComparison, SUPPORTED_CITIES, type LayerOneResult } from '../../lib/scenario-builder';
 
 /**
@@ -15,6 +16,11 @@ import { buildLayerOneComparison, SUPPORTED_CITIES, type LayerOneResult } from '
  * `buildLayerOneComparison` already computes all four horizons (5/10/15/25
  * years) in one call; this page reads the break-even year straight off
  * that table instead of re-running the comparison per horizon.
+ *
+ * Phase 9.1: the terminal-net-worth-by-horizon chart is the exact same
+ * shape the Comparator already draws with `ResultChart` — reused as-is
+ * rather than redrawn, since `layerOne.result`/`horizonsMonths` are the
+ * same `ComparisonResult` shape in both places.
  */
 interface BreakEven {
   crosses: boolean;
@@ -76,31 +82,32 @@ export function RentVsBuy() {
       subtitle="Buying a home your budget can support, versus renting an equivalent home and investing the difference — on equal monthly outflow, after tax, including the opportunity cost of the down payment."
       back="home"
       backLabel="← FinCalc"
+      form={
+        <form
+          className="flex flex-col gap-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSubmitted(true);
+          }}
+        >
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="text-ink">City</span>
+            <select className="rounded-sm border border-hairline bg-paper px-3 py-2 text-ink" defaultValue={SUPPORTED_CITIES[0].id} disabled>
+              {SUPPORTED_CITIES.map((c) => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+          </label>
+          <NumberField label="Household income, per month (take-home)" value={monthlyIncome} onChange={setMonthlyIncome} />
+          <NumberField label="Monthly housing budget" value={monthlyBudget} onChange={setMonthlyBudget} />
+          <SubmitButton>Compare →</SubmitButton>
+        </form>
+      }
     >
-      <form
-        className="mt-8 flex max-w-sm flex-col gap-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setSubmitted(true);
-        }}
-      >
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="text-ink">City</span>
-          <select className="rounded-sm border border-hairline bg-paper px-3 py-2 text-ink" defaultValue={SUPPORTED_CITIES[0].id} disabled>
-            {SUPPORTED_CITIES.map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
-          </select>
-        </label>
-        <NumberField label="Household income, per month (take-home)" value={monthlyIncome} onChange={setMonthlyIncome} />
-        <NumberField label="Monthly housing budget" value={monthlyBudget} onChange={setMonthlyBudget} />
-        <SubmitButton>Compare →</SubmitButton>
-      </form>
-
       {error && <Callout>{error}</Callout>}
 
       {layerOne && breakEven && (
-        <section className="mt-14 flex max-w-md flex-col gap-8" aria-label="Rent vs buy result">
+        <section className="flex flex-col gap-8" aria-label="Rent vs buy result">
           <p className="font-serif-heading max-w-md text-2xl leading-snug text-ink sm:text-3xl">
             {breakEven.crosses ? (
               <>
@@ -112,6 +119,8 @@ export function RentVsBuy() {
               </>
             )}
           </p>
+
+          <ResultChart result={layerOne.result} horizonsMonths={layerOne.horizonsMonths} />
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[320px] border-collapse text-sm">

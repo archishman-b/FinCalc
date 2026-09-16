@@ -10,22 +10,38 @@ import { navigate, type RouteId } from '../lib/router';
  * Tier 1 grid (`calculators`) since that's where every one of these pages
  * is reached from; Rent vs Buy overrides it to `home` since it's also
  * door 2, reachable directly from the entry router.
+ *
+ * Phase 9.1 (user feedback, viewing the live site on a desktop monitor:
+ * "too textual... only uses a third of the on-screen real estate, it
+ * needs to scale well across devices"): the form and its result are now
+ * two explicit slots — `form` and `children` — instead of one `children`
+ * blob stacked top-to-bottom. Below `lg` they still stack exactly as
+ * before (form, then result). From `lg` up they sit side by side in a
+ * fixed-width-form / flexible-result grid, with the form `sticky` so it
+ * stays reachable while a long result — a chart, a table, a Monte Carlo
+ * panel — scrolls underneath it. This is the one change that fixes every
+ * calculator's use of screen space at once, since all eight Tier 1 pages
+ * plus Rent vs Buy share this shell; Comparator.tsx applies the same
+ * grid by hand since it pre-dates CalcShell and has its own saved-
+ * scenarios panel above the form.
  */
 export function CalcShell({
   title,
   subtitle,
   back = 'calculators',
   backLabel = '← All calculators',
+  form,
   children,
 }: {
   title: string;
   subtitle?: string;
   back?: RouteId;
   backLabel?: string;
-  children: ReactNode;
+  form: ReactNode;
+  children?: ReactNode;
 }) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-10 sm:px-8">
+    <main className="mx-auto min-h-dvh max-w-[1440px] px-5 py-10 sm:px-8 lg:px-12">
       <button
         type="button"
         onClick={() => navigate(back)}
@@ -35,9 +51,12 @@ export function CalcShell({
       </button>
 
       <h1 className="mt-8 text-3xl leading-tight text-ink sm:text-4xl">{title}</h1>
-      {subtitle && <p className="mt-3 max-w-md text-ink-muted">{subtitle}</p>}
+      {subtitle && <p className="mt-3 max-w-xl text-ink-muted">{subtitle}</p>}
 
-      {children}
+      <div className="lg:grid lg:grid-cols-[minmax(320px,400px)_1fr] lg:items-start lg:gap-x-16 xl:gap-x-20">
+        <div className="mt-8 lg:sticky lg:top-10">{form}</div>
+        <div className="mt-14 min-w-0 lg:mt-8">{children}</div>
+      </div>
 
       <footer className="mt-16 max-w-md space-y-1 text-sm text-ink-muted">
         <p>Runs entirely in your browser. No backend, no accounts, nothing you enter leaves this page.</p>

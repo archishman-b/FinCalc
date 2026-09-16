@@ -5,6 +5,7 @@ import { computeIncomeTax, type AgeBand, type IncomeTaxResult } from '@fincalc/e
 
 import { Amount } from '../../components/Amount';
 import { CalcShell, NumberField, SelectField, SubmitButton } from '../../components/CalcShell';
+import { GroupedComparisonChart } from '../../components/charts';
 
 const FY_OPTIONS = [
   { value: '2026-27', label: 'FY 2026-27' },
@@ -59,38 +60,49 @@ export function IncomeTaxCalculator() {
       rules,
     );
 
-    return { oldRegime, newRegime, better: oldRegime.totalTaxPayable <= newRegime.totalTaxPayable ? 'old' : 'new' } as const;
+    const chartData = [
+      { metric: 'Taxable income', a: oldRegime.taxableIncome, b: newRegime.taxableIncome },
+      { metric: 'Total tax payable', a: oldRegime.totalTaxPayable, b: newRegime.totalTaxPayable },
+    ];
+
+    return {
+      oldRegime,
+      newRegime,
+      better: oldRegime.totalTaxPayable <= newRegime.totalTaxPayable ? 'old' : 'new',
+      chartData,
+    } as const;
   }, [submitted, fy, age, grossSalary, otherSourcesIncome, rentPaidAnnual, isMetro, section80c, selfAndFamilyPremium, selfOccupiedHomeLoanInterest]);
 
   return (
     <CalcShell
       title="Income tax: old vs new regime"
       subtitle="Both regimes, side by side, for the FY you pick — HRA, Section 80C/80D, and self-occupied home-loan interest all apply under the old regime only, per current law."
+      form={
+        <form
+          className="flex flex-col gap-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSubmitted(true);
+          }}
+        >
+          <SelectField label="Financial year" value={fy} onChange={setFy} options={FY_OPTIONS} />
+          <SelectField label="Age" value={age} onChange={setAge} options={AGE_OPTIONS} />
+          <NumberField label="Gross salary, annual" value={grossSalary} onChange={setGrossSalary} step={10000} />
+          <NumberField label="Other income (interest, etc.), annual" value={otherSourcesIncome} onChange={setOtherSourcesIncome} step={10000} required={false} />
+          <NumberField label="Rent paid, annual (for HRA, old regime)" value={rentPaidAnnual} onChange={setRentPaidAnnual} step={10000} required={false} />
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" checked={isMetro} onChange={(e) => setIsMetro(e.target.checked)} className="accent-rust" />
+            Metro city (Delhi, Mumbai, Kolkata, Chennai) — 50% HRA exemption cap instead of 40%
+          </label>
+          <NumberField label="Section 80C investment, annual (old regime)" value={section80c} onChange={setSection80c} step={10000} required={false} />
+          <NumberField label="Health insurance premium, self &amp; family (Section 80D, old regime)" value={selfAndFamilyPremium} onChange={setSelfAndFamilyPremium} step={5000} required={false} />
+          <NumberField label="Self-occupied home-loan interest (Section 24(b), old regime)" value={selfOccupiedHomeLoanInterest} onChange={setSelfOccupiedHomeLoanInterest} step={10000} required={false} />
+          <SubmitButton>Calculate →</SubmitButton>
+        </form>
+      }
     >
-      <form
-        className="mt-8 flex max-w-sm flex-col gap-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setSubmitted(true);
-        }}
-      >
-        <SelectField label="Financial year" value={fy} onChange={setFy} options={FY_OPTIONS} />
-        <SelectField label="Age" value={age} onChange={setAge} options={AGE_OPTIONS} />
-        <NumberField label="Gross salary, annual" value={grossSalary} onChange={setGrossSalary} step={10000} />
-        <NumberField label="Other income (interest, etc.), annual" value={otherSourcesIncome} onChange={setOtherSourcesIncome} step={10000} required={false} />
-        <NumberField label="Rent paid, annual (for HRA, old regime)" value={rentPaidAnnual} onChange={setRentPaidAnnual} step={10000} required={false} />
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input type="checkbox" checked={isMetro} onChange={(e) => setIsMetro(e.target.checked)} className="accent-rust" />
-          Metro city (Delhi, Mumbai, Kolkata, Chennai) — 50% HRA exemption cap instead of 40%
-        </label>
-        <NumberField label="Section 80C investment, annual (old regime)" value={section80c} onChange={setSection80c} step={10000} required={false} />
-        <NumberField label="Health insurance premium, self &amp; family (Section 80D, old regime)" value={selfAndFamilyPremium} onChange={setSelfAndFamilyPremium} step={5000} required={false} />
-        <NumberField label="Self-occupied home-loan interest (Section 24(b), old regime)" value={selfOccupiedHomeLoanInterest} onChange={setSelfOccupiedHomeLoanInterest} step={10000} required={false} />
-        <SubmitButton>Calculate →</SubmitButton>
-      </form>
-
       {result && (
-        <section className="mt-14 flex max-w-lg flex-col gap-8" aria-label="Income tax result">
+        <section className="flex max-w-lg flex-col gap-8" aria-label="Income tax result">
           <p className="font-serif-heading max-w-md text-2xl leading-snug text-ink sm:text-3xl">
             The <span className="text-rust">{result.better} regime</span> is cheaper for these numbers, by{' '}
             <Amount value={Math.abs(result.oldRegime.totalTaxPayable - result.newRegime.totalTaxPayable)} className="text-rust" />.
@@ -133,6 +145,16 @@ export function IncomeTaxCalculator() {
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <div>
+            <p className="mb-3 text-sm text-ink">Old vs. new regime, side by side</p>
+            <GroupedComparisonChart
+              data={result.chartData}
+              seriesAName="Old regime"
+              seriesBName="New regime"
+              ariaLabel="Taxable income and total tax payable, old regime versus new regime"
+            />
           </div>
         </section>
       )}

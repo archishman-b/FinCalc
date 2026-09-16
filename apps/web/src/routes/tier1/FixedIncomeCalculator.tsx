@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 
 import { getFixedIncomeRules, type FixedIncomeProduct } from '@fincalc/data';
-import { annualContributionFutureValue, compoundAnnualContributions, compoundAnnually, compoundAtFrequency } from '@fincalc/engine';
+import { compoundAnnualContributions, compoundAnnually, compoundAtFrequency } from '@fincalc/engine';
 
 import { Amount } from '../../components/Amount';
 import { CalcShell, NumberField, SelectField, SubmitButton } from '../../components/CalcShell';
+import { GrowthChart } from '../../components/charts';
 
 const RULES = getFixedIncomeRules();
 const PRODUCT_IDS = Object.keys(RULES.products);
@@ -36,6 +37,13 @@ const FREQUENCY: Record<FixedIncomeProduct['compounding'], number> = { annual: 1
  * exact monthly-running-balance mechanics real EPF uses. SCSS/POMIS pay
  * interest out rather than compounding it — simple interest over the
  * tenure, principal returned at the end.
+ *
+ * Phase 9.1: the year-by-year contributed-vs-value series backing the
+ * growth chart is built with the exact same per-product-shape logic as
+ * the headline maturity figure above it — `compoundAnnualContributions`'s
+ * own yearly rows for the two recurring shapes, and the matching
+ * lumpsum/simple-interest formula evaluated at each year for the rest —
+ * never a second, looser approximation just for the picture.
  */
 export function FixedIncomeCalculator() {
   const [productId, setProductId] = useState('ppf');
@@ -48,93 +56,113 @@ export function FixedIncomeCalculator() {
   const result = useMemo(() => {
     if (!submitted) return null;
     const rate = product.rate;
+    let yearlyRows: { year: number; invested: number; value: number }[];
 
     if (PAYOUT_PRODUCTS.has(productId)) {
       const totalInterest = amount * rate * years;
-      return { maturityValue: amount, totalInterest, totalContributed: amount, isPayout: true };
+      yearlyRows = Array.from({ length: years }, (_, i) => ({ year: i + 1, invested: amount, value: amount + amount * rate * (i + 1) }));
+      return { maturityValue: amount, totalInterest, totalContributed: amount, isPayout: true, yearlyRows };
     }
 
     if (product.contributionMode === 'recurring_annual') {
-      const maturityValue = annualContributionFutureValue(amount, rate, years);
       const rows = compoundAnnualContributions(() => amount, () => rate, years);
-      const totalContributed = rows.reduce((s, r) => s + r.contribution, 0);
-      return { maturityValue, totalInterest: maturityValue - totalContributed, totalContributed, isPayout: false };
+      const maturityValue = rows[rows.length - 1]?.closingValue ?? 0;
+      let cumulative = 0;
+      yearlyRows = rows.map((r) => {
+        cumulative += r.contribution;
+        return { year: r.year, invested: cumulative, value: r.closingValue };
+      });
+      const totalContributed = cumulative;
+      return { maturityValue, totalInterest: maturityValue - totalContributed, totalContributed, isPayout: false, yearlyRows };
     }
 
     if (product.contributionMode === 'recurring_monthly') {
       const annualDeposit = amount * 12;
-      const maturityValue = annualContributionFutureValue(annualDeposit, rate, years);
+      const rows = compoundAnnualContributions(() => annualDeposit, () => rate, years);
+      const maturityValue = rows[rows.length - 1]?.closingValue ?? 0;
+      let cumulative = 0;
+      yearlyRows = rows.map((r) => {
+        cumulative += r.contribution;
+        return { year: r.year, invested: cumulative, value: r.closingValue };
+      });
       const totalContributed = annualDeposit * years;
-      return { maturityValue, totalInterest: maturityValue - totalContributed, totalContributed, isPayout: false };
+      return { maturityValue, totalInterest: maturityValue - totalContributed, totalContributed, isPayout: false, yearlyRows };
     }
 
     // lumpsum or flexible (POSA)
     const periodsPerYear = FREQUENCY[product.compounding];
-    const maturityValue =
-      periodsPerYear === 1 ? compoundAnnually(amount, rate, years) : compoundAtFrequency(amount, rate, years, periodsPerYear);
-    return { maturityValue, totalInterest: maturityValue - amount, totalContributed: amount, isPayout: false };
+    const valueAt = (y: number) => (periodsPerYear === 1 ? compoundAnnually(amount, rate, y) : compoundAtFrequency(amount, rate, y, periodsPerYear));
+    const maturityValue = valueAt(years);
+    yearlyRows = Array.from({ length: years }, (_, i) => ({ year: i + 1, invested: amount, value: valueAt(i + 1) }));
+    return { maturityValue, totalInterest: maturityValue - amount, totalContributed: amount, isPayout: false, yearlyRows };
   }, [submitted, productId, amount, years, product]);
 
   return (
     <CalcShell
       title="Fixed income: FD, RD, PPF, SSY, EPF, VPF, NSC & more"
       subtitle="Government small-savings schemes, EPF/VPF and the Post Office rate ladder — current rates, lock-in and tax treatment, all sourced and dated."
+      form={
+        <form
+          className="flex flex-col gap-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSubmitted(true);
+          }}
+        >
+          <SelectField label="Product" value={productId} onChange={setProductId} options={PRODUCT_OPTIONS} />
+          <NumberField
+            label={
+              product.contributionMode === 'recurring_annual'
+                ? 'Annual contribution'
+                : product.contributionMode === 'recurring_monthly'
+                  ? 'Monthly contribution'
+                  : 'Amount'
+            }
+            hint={product.minContribution ? `Minimum ${product.minContribution.toLocaleString('en-IN')} — shown for reference, not enforced by this field.` : undefined}
+            value={amount}
+            onChange={setAmount}
+            // Deliberately min={0}, not product.minContribution: the real
+            // minimum varies by product (₹250 for SSY, ₹1,000 for NSC, none
+            // for EPF...) and a nonzero min that doesn't share a step-aligned
+            // offset with this field's fixed step breaks native HTML5
+            // validation the same way the EMI/loan-tenure fields did (Phase
+            // 6) — the real minimum is shown as a hint instead.
+            min={0}
+            max={product.maxContributionPerYear ?? undefined}
+          />
+          <NumberField label="Years" value={years} onChange={setYears} step={1} min={1} max={40} />
+
+          <div className="rounded-sm border border-hairline px-4 py-3 text-xs text-ink-muted">
+            <p>
+              Rate: <span className="font-mono tabular-nums text-ink">{(product.rate * 100).toFixed(2)}%</span> · Compounding: {product.compounding} ·{' '}
+              {product.tenureYears ? `Typical tenure: ${product.tenureYears.toFixed(1)} years · ` : ''}
+              {product.lockInYears !== null ? `Lock-in: ${product.lockInYears} years · ` : ''}
+              {product.section80C ? 'Section 80C eligible' : 'Not Section 80C eligible'}
+            </p>
+            {product.notes && <p className="mt-2">{product.notes}</p>}
+          </div>
+
+          <SubmitButton>Calculate →</SubmitButton>
+        </form>
+      }
     >
-      <form
-        className="mt-8 flex max-w-sm flex-col gap-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setSubmitted(true);
-        }}
-      >
-        <SelectField label="Product" value={productId} onChange={setProductId} options={PRODUCT_OPTIONS} />
-        <NumberField
-          label={
-            product.contributionMode === 'recurring_annual'
-              ? 'Annual contribution'
-              : product.contributionMode === 'recurring_monthly'
-                ? 'Monthly contribution'
-                : 'Amount'
-          }
-          hint={product.minContribution ? `Minimum ${product.minContribution.toLocaleString('en-IN')} — shown for reference, not enforced by this field.` : undefined}
-          value={amount}
-          onChange={setAmount}
-          // Deliberately min={0}, not product.minContribution: the real
-          // minimum varies by product (₹250 for SSY, ₹1,000 for NSC, none
-          // for EPF...) and a nonzero min that doesn't share a step-aligned
-          // offset with this field's fixed step breaks native HTML5
-          // validation the same way the EMI/loan-tenure fields did (Phase
-          // 6) — the real minimum is shown as a hint instead.
-          min={0}
-          max={product.maxContributionPerYear ?? undefined}
-        />
-        <NumberField label="Years" value={years} onChange={setYears} step={1} min={1} max={40} />
-
-        <div className="rounded-sm border border-hairline px-4 py-3 text-xs text-ink-muted">
-          <p>
-            Rate: <span className="font-mono tabular-nums text-ink">{(product.rate * 100).toFixed(2)}%</span> · Compounding: {product.compounding} ·{' '}
-            {product.tenureYears ? `Typical tenure: ${product.tenureYears.toFixed(1)} years · ` : ''}
-            {product.lockInYears !== null ? `Lock-in: ${product.lockInYears} years · ` : ''}
-            {product.section80C ? 'Section 80C eligible' : 'Not Section 80C eligible'}
-          </p>
-          {product.notes && <p className="mt-2">{product.notes}</p>}
-        </div>
-
-        <SubmitButton>Calculate →</SubmitButton>
-      </form>
-
       {result && (
-        <section className="mt-14 flex max-w-md flex-col gap-8" aria-label="Fixed income result">
+        <section className="flex flex-col gap-8" aria-label="Fixed income result">
           <div>
             <p className="text-sm text-ink-muted">{result.isPayout ? 'Principal returned at maturity' : 'Maturity value'}</p>
             <Amount value={result.maturityValue} compact={false} className="font-serif-heading text-4xl text-rust" />
           </div>
-          <dl className="grid grid-cols-2 gap-y-4 text-sm">
+          <dl className="grid max-w-md grid-cols-2 gap-y-4 text-sm">
             <dt className="text-ink-muted">{result.isPayout ? 'Total interest paid out over the tenure' : 'Total interest earned'}</dt>
             <dd className="text-right"><Amount value={result.totalInterest} className="text-moss" /></dd>
             <dt className="text-ink-muted">Total contributed</dt>
             <dd className="text-right"><Amount value={result.totalContributed} className="text-ink" /></dd>
           </dl>
+
+          <div>
+            <p className="mb-3 text-sm text-ink">Growth over time</p>
+            <GrowthChart data={result.yearlyRows} ariaLabel="Contributed amount versus resulting value, year by year" />
+          </div>
         </section>
       )}
     </CalcShell>

@@ -52,8 +52,8 @@ export function ResultChart({ result, horizonsMonths }: ResultChartProps) {
             }}
           />
           <Legend wrapperStyle={{ fontFamily: 'ui-sans-serif, system-ui, sans-serif', fontSize: 13, color: palette.ink }} />
-          <Bar dataKey={buy.scenarioName} fill={palette.rust} radius={[2, 2, 0, 0]} />
-          <Bar dataKey={rent.scenarioName} fill={palette.moss} radius={[2, 2, 0, 0]} />
+          <Bar isAnimationActive={false} dataKey={buy.scenarioName} fill={palette.rust} radius={[2, 2, 0, 0]} />
+          <Bar isAnimationActive={false} dataKey={rent.scenarioName} fill={palette.moss} radius={[2, 2, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

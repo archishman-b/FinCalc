@@ -5,6 +5,7 @@ import { formatINR } from '@fincalc/ui';
 import { Amount } from '../components/Amount';
 import { MonteCarloPanel } from '../components/MonteCarloPanel';
 import { ResultChart } from '../components/ResultChart';
+import { CalcShell } from '../components/CalcShell';
 import { SavedScenariosPanel, ScenarioActions } from '../components/ScenarioTools';
 import {
   buildLayerOneComparison,
@@ -17,7 +18,6 @@ import {
 } from '../lib/scenario-builder';
 import { deleteSavedScenario, listSavedScenarios, saveScenario, type SavedScenario } from '../lib/saved-scenarios';
 import { readScenarioStateFromUrl, syncScenarioStateToUrl } from '../lib/scenario-url';
-import { navigate } from '../lib/router';
 
 /** Layer 1 (brief §4): six inputs at most, a real answer in about a minute. This flow uses four — city, household income, housing budget, horizon — exactly what the brief specifies, with everything else defaulted and shown in the assumptions strip below the result. */
 export function Comparator() {
@@ -84,101 +84,95 @@ export function Comparator() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-5 py-10 sm:px-8">
-      <button
-        type="button"
-        onClick={() => navigate('home')}
-        className="w-fit text-sm text-ink-muted hover:text-rust focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-rust"
-      >
-        ← FinCalc
-      </button>
+    <CalcShell
+      title="Where should this money go?"
+      subtitle="We’ll size a representative home your budget can support, and compare buying it against renting an equivalent home and investing the difference — on equal monthly outflow, after tax."
+      back="home"
+      backLabel="← FinCalc"
+      form={
+        <>
+          <SavedScenariosPanel scenarios={savedScenarios} onLoad={handleLoadScenario} onDelete={handleDeleteScenario} />
 
-      <h1 className="mt-8 text-3xl leading-tight text-ink sm:text-4xl">Where should this money go?</h1>
-      <p className="mt-3 max-w-md text-ink-muted">
-        We&rsquo;ll size a representative home your budget can support, and compare buying it against renting an equivalent
-        home and investing the difference — on equal monthly outflow, after tax.
-      </p>
-
-      <SavedScenariosPanel scenarios={savedScenarios} onLoad={handleLoadScenario} onDelete={handleDeleteScenario} />
-
-      <form
-        className="mt-8 flex max-w-sm flex-col gap-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setSubmitted(true);
-        }}
-      >
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="text-ink">City</span>
-          <select
-            className="rounded-sm border border-hairline bg-paper px-3 py-2 text-ink"
-            defaultValue={SUPPORTED_CITIES[0].id}
-            disabled
+          <form
+            className="mt-6 flex flex-col gap-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSubmitted(true);
+            }}
           >
-            {SUPPORTED_CITIES.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-          <span className="text-xs text-ink-muted">More cities as stamp-duty data ships.</span>
-        </label>
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="text-ink">City</span>
+              <select
+                className="rounded-sm border border-hairline bg-paper px-3 py-2 text-ink"
+                defaultValue={SUPPORTED_CITIES[0].id}
+                disabled
+              >
+                {SUPPORTED_CITIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-ink-muted">More cities as stamp-duty data ships.</span>
+            </label>
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="text-ink">Household income, per month (take-home)</span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            step={1000}
-            required
-            value={monthlyIncome}
-            onChange={(e) => setMonthlyIncome(Number(e.target.value))}
-            className="rounded-sm border border-hairline bg-paper px-3 py-2 font-mono tabular-nums text-ink"
-          />
-          <span className="text-xs text-ink-muted">{formatINR(monthlyIncome, { compact: true })}/month</span>
-        </label>
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="text-ink">Household income, per month (take-home)</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1000}
+                required
+                value={monthlyIncome}
+                onChange={(e) => setMonthlyIncome(Number(e.target.value))}
+                className="rounded-sm border border-hairline bg-paper px-3 py-2 font-mono tabular-nums text-ink"
+              />
+              <span className="text-xs text-ink-muted">{formatINR(monthlyIncome, { compact: true })}/month</span>
+            </label>
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="text-ink">Monthly housing budget</span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            step={1000}
-            required
-            value={monthlyBudget}
-            onChange={(e) => setMonthlyBudget(Number(e.target.value))}
-            className="rounded-sm border border-hairline bg-paper px-3 py-2 font-mono tabular-nums text-ink"
-          />
-          <span className="text-xs text-ink-muted">{formatINR(monthlyBudget, { compact: true })}/month</span>
-        </label>
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="text-ink">Monthly housing budget</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1000}
+                required
+                value={monthlyBudget}
+                onChange={(e) => setMonthlyBudget(Number(e.target.value))}
+                className="rounded-sm border border-hairline bg-paper px-3 py-2 font-mono tabular-nums text-ink"
+              />
+              <span className="text-xs text-ink-muted">{formatINR(monthlyBudget, { compact: true })}/month</span>
+            </label>
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="text-ink">Horizon</span>
-          <select
-            className="rounded-sm border border-hairline bg-paper px-3 py-2 text-ink"
-            value={horizonYears}
-            onChange={(e) => setHorizonYears(Number(e.target.value) as HorizonYears)}
-          >
-            {HORIZON_OPTIONS.map((y) => (
-              <option key={y} value={y}>
-                {y} years
-              </option>
-            ))}
-          </select>
-        </label>
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="text-ink">Horizon</span>
+              <select
+                className="rounded-sm border border-hairline bg-paper px-3 py-2 text-ink"
+                value={horizonYears}
+                onChange={(e) => setHorizonYears(Number(e.target.value) as HorizonYears)}
+              >
+                {HORIZON_OPTIONS.map((y) => (
+                  <option key={y} value={y}>
+                    {y} years
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <button
-          type="submit"
-          className="mt-2 w-fit rounded-sm bg-rust px-5 py-2.5 text-paper hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rust"
-        >
-          Compare scenarios →
-        </button>
-      </form>
-
+            <button
+              type="submit"
+              className="mt-2 w-fit rounded-sm bg-rust px-5 py-2.5 text-paper hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rust"
+            >
+              Compare scenarios →
+            </button>
+          </form>
+        </>
+      }
+    >
       {error && (
-        <p role="alert" className="mt-8 max-w-md rounded-sm border border-ochre bg-ochre/10 px-4 py-3 text-sm text-ink">
+        <p role="alert" className="max-w-md rounded-sm border border-ochre bg-ochre/10 px-4 py-3 text-sm text-ink">
           {error}
         </p>
       )}
@@ -192,12 +186,7 @@ export function Comparator() {
           onSaveScenario={handleSaveScenario}
         />
       )}
-
-      <footer className="mt-16 max-w-md space-y-1 text-sm text-ink-muted">
-        <p>Runs entirely in your browser. No backend, no accounts, nothing you enter leaves this page.</p>
-        <p>Information, not advice — FinCalc is not SEBI- or IRDAI-registered investment advice.</p>
-      </footer>
-    </main>
+    </CalcShell>
   );
 }
 
@@ -217,7 +206,7 @@ function ComparatorResult({
   const { result } = layerOne;
 
   return (
-    <section className="mt-14 flex max-w-2xl flex-col gap-10" aria-label="Comparison result">
+    <section className="flex flex-col gap-10" aria-label="Comparison result">
       {/* 1. Parity warnings first — brief §4: "If the assumptions aren't symmetric, the user should know that before they read a number." */}
       <div>
         {result.parityWarnings.length === 0 ? (
