@@ -27,6 +27,17 @@
  * ... deliberately unshipped"). Guessing a rate for an unlisted city would
  * break the project's own "flag rather than guess" rule, so the field is
  * real but single-valued until more cities' data ships.
+ *
+ * Phase 9.2 (user feedback on the live Rent vs Buy page: "everything else
+ * is a blackbox for the user... the user should be able to engage all the
+ * available levers"): every documented default constant below is now an
+ * *optional override* on LayerOneInputs rather than a hard-coded value —
+ * RentVsBuy.tsx renders one editable field per lever, pre-filled with
+ * these same DEFAULT_* constants (imported, not re-typed, so the form and
+ * the engine can never silently drift apart). Omit a field (or reuse an
+ * old saved/shared link from before this phase) and the named default
+ * still applies — this is why every new field on LayerOneInputs is
+ * optional rather than a breaking signature change.
  */
 import {
   getCostInflationIndexRules,
@@ -41,11 +52,13 @@ import {
   rentalExpensePosition,
   solveGrossSalaryForNetIncome,
   solveHurdleRate,
+  type AgeBand,
   type CompareOptions,
   type ComparisonResult,
   type HouseholdTaxConfig,
   type MarketContext,
   type Scenario,
+  type TaxRegime,
 } from '@fincalc/engine';
 
 import { buildMarketContext, type AssumptionSeries } from './market-context';
@@ -63,37 +76,61 @@ export interface LayerOneInputs {
   /** Monthly budget for housing — the equal-outflow target both scenarios are compared on. */
   monthlyHousingBudget: number;
   horizonYears: HorizonYears;
+
+  // ---- Phase 9.2: every lever below is optional — omitted means "use the matching DEFAULT_* constant". ----
+  /** Home loan interest rate, annual, as a percentage (8.5 means 8.5%). */
+  homeLoanRatePercent?: number;
+  /** Home loan tenure, in years. */
+  homeLoanTenureYears?: number;
+  /** Down payment as a percentage of the property price (20 means 20% down, 80% loan-to-value). */
+  downPaymentPercent?: number;
+  /** Long-run residential property appreciation, annual, as a percentage. */
+  propertyAppreciationPercent?: number;
+  /** The shared reinvestment/index-fund return both scenarios' surplus compounds at, annual, as a percentage. */
+  reinvestmentRatePercent?: number;
+  /** Assumed gross rental yield for a home equivalent to the one the Buy scenario buys — sizes the Rent scenario's rent. */
+  rentalYieldPercent?: number;
+  /** Society maintenance + upkeep, as a percentage of the monthly housing budget reserved before sizing the EMI. */
+  maintenancePercentOfBudget?: number;
+  /** Municipal property tax, annualised, as a percentage of the annual housing budget. */
+  propertyTaxPercentOfAnnualBudget?: number;
+  /** Refundable security deposit on the rented home, expressed as a number of months' rent. */
+  securityDepositMonths?: number;
+  /** Household's income-tax regime — a household files one return, so this applies to both scenarios equally. */
+  householdRegime?: TaxRegime;
+  /** Household's age band, for slab/rebate purposes. */
+  householdAge?: AgeBand;
 }
 
-// ---- Documented default assumptions (brief principle 8: err conservative; principle 5: every one inspectable) ----
+// ---- Documented default assumptions (brief principle 8: err conservative; principle 5: every one inspectable and, since Phase 9.2, directly editable) ----
 
 const PROPERTY_APPRECIATION_SERIES = 'property.appreciation';
 /** Conservative long-run residential appreciation default — matches the rate used throughout Phase 4's own test scenarios. */
-const PROPERTY_APPRECIATION_RATE = 0.06;
+export const DEFAULT_PROPERTY_APPRECIATION_PERCENT = 6.0;
 
 const SWEEP_SERIES = 'default.index_fund';
 /** The single shared reinvestment rate for both scenarios' surplus — see the module doc comment on why this must never differ between scenarios. */
-const SWEEP_RATE = 0.11;
+export const DEFAULT_REINVESTMENT_RATE_PERCENT = 11.0;
 
-/** Typical current home-loan rate. An editable assumption, not a cited tax/stamp-duty figure — Layer 2 will expose this as a slider. */
-const HOME_LOAN_RATE = 0.085;
+/** Typical current home-loan rate — an editable assumption, not a cited tax/stamp-duty figure. */
+export const DEFAULT_HOME_LOAN_RATE_PERCENT = 8.5;
 /** 20-year tenure: the common default a household takes regardless of which horizon they're evaluating the decision at. */
-const HOME_LOAN_TENURE_MONTHS = 240;
-/** 80% loan-to-value, i.e. a 20% down payment — a conventional Indian home-loan default. */
-const LOAN_TO_VALUE = 0.8;
-/** Society maintenance + upkeep, as a fraction of the monthly housing budget reserved before sizing the EMI. Rough — Layer 2 will make this a direct input. */
-const MAINTENANCE_SHARE_OF_BUDGET = 0.02;
-/** Municipal property tax, annualised, as a fraction of the *annual* housing budget. Rough — same caveat as above. */
-const PROPERTY_TAX_SHARE_OF_ANNUAL_BUDGET = 0.01;
-/** Assumed gross residential rental yield for a home equivalent to what the Buy scenario buys — a common Indian-metro ballpark, not a cited figure (see HOME_LOAN_RATE's caveat). Sizes the Rent scenario's rent, not a tax/stamp-duty fact. */
-const ASSUMED_GROSS_RENTAL_YIELD = 0.03;
-const SECURITY_DEPOSIT_MONTHS = 3;
+export const DEFAULT_HOME_LOAN_TENURE_YEARS = 20;
+/** A conventional Indian home-loan down payment (80% loan-to-value). */
+export const DEFAULT_DOWN_PAYMENT_PERCENT = 20;
+/** Society maintenance + upkeep, as a fraction of the monthly housing budget reserved before sizing the EMI. */
+export const DEFAULT_MAINTENANCE_PERCENT_OF_BUDGET = 2.0;
+/** Municipal property tax, annualised, as a fraction of the *annual* housing budget. */
+export const DEFAULT_PROPERTY_TAX_PERCENT_OF_ANNUAL_BUDGET = 1.0;
+/** Assumed gross residential rental yield for a home equivalent to what the Buy scenario buys — a common Indian-metro ballpark, not a cited figure (see DEFAULT_HOME_LOAN_RATE_PERCENT's caveat). Sizes the Rent scenario's rent, not a tax/stamp-duty fact. */
+export const DEFAULT_RENTAL_YIELD_PERCENT = 3.0;
+export const DEFAULT_SECURITY_DEPOSIT_MONTHS = 3;
 
 const HORIZONS_MONTHS = [60, 120, 180, 300] as const;
 
-/** Household defaults, per the project's own established convention (decisions-and-workflow.md): the new regime is where the sharp edges live, and a 35-40-year-old household (the brief's own founding persona) is squarely working-age. Layer 2 will make both editable. */
-const HOUSEHOLD_REGIME = 'new' as const;
-const HOUSEHOLD_AGE = 'under60' as const;
+/** Household defaults, per the project's own established convention (decisions-and-workflow.md): the new regime is where the sharp edges live, and a 35-40-year-old household (the brief's own founding persona) is squarely working-age. */
+export const DEFAULT_HOUSEHOLD_REGIME: TaxRegime = 'new';
+export const DEFAULT_HOUSEHOLD_AGE: AgeBand = 'under60';
 
 function currentFy(date: Date = new Date()): string {
   const year = date.getUTCFullYear();
@@ -111,15 +148,48 @@ export interface LayerOneResult {
   horizonsMonths: readonly number[];
   selectedHorizonMonths: number;
   /** What the Buy scenario's home actually costs and how it was financed — shown in the assumptions strip. */
-  buy: { propertyPrice: number; loanPrincipal: number; entryCosts: number };
+  buy: {
+    propertyPrice: number;
+    loanPrincipal: number;
+    entryCosts: number;
+    loanRatePercent: number;
+    tenureYears: number;
+    downPaymentPercent: number;
+  };
   /** The market rent assumed for an equivalent home in the Rent scenario. */
-  rent: { assumedMonthlyRent: number; securityDeposit: number };
+  rent: { assumedMonthlyRent: number; securityDeposit: number; rentalYieldPercent: number; securityDepositMonths: number };
   assumptions: readonly AssumptionSeries[];
 }
 
 export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult {
   if (inputs.monthlyHouseholdIncomeNet <= 0) throw new RangeError('Household income must be positive.');
   if (inputs.monthlyHousingBudget <= 0) throw new RangeError('Housing budget must be positive.');
+
+  const homeLoanRatePercent = inputs.homeLoanRatePercent ?? DEFAULT_HOME_LOAN_RATE_PERCENT;
+  const homeLoanTenureYears = inputs.homeLoanTenureYears ?? DEFAULT_HOME_LOAN_TENURE_YEARS;
+  const downPaymentPercent = inputs.downPaymentPercent ?? DEFAULT_DOWN_PAYMENT_PERCENT;
+  const propertyAppreciationPercent = inputs.propertyAppreciationPercent ?? DEFAULT_PROPERTY_APPRECIATION_PERCENT;
+  const reinvestmentRatePercent = inputs.reinvestmentRatePercent ?? DEFAULT_REINVESTMENT_RATE_PERCENT;
+  const rentalYieldPercent = inputs.rentalYieldPercent ?? DEFAULT_RENTAL_YIELD_PERCENT;
+  const maintenancePercentOfBudget = inputs.maintenancePercentOfBudget ?? DEFAULT_MAINTENANCE_PERCENT_OF_BUDGET;
+  const propertyTaxPercentOfAnnualBudget = inputs.propertyTaxPercentOfAnnualBudget ?? DEFAULT_PROPERTY_TAX_PERCENT_OF_ANNUAL_BUDGET;
+  const securityDepositMonths = inputs.securityDepositMonths ?? DEFAULT_SECURITY_DEPOSIT_MONTHS;
+  const householdRegime = inputs.householdRegime ?? DEFAULT_HOUSEHOLD_REGIME;
+  const householdAge = inputs.householdAge ?? DEFAULT_HOUSEHOLD_AGE;
+
+  if (downPaymentPercent < 0 || downPaymentPercent >= 100) {
+    throw new RangeError('Down payment must be at least 0% and less than 100%.');
+  }
+  if (homeLoanTenureYears <= 0) throw new RangeError('Home loan tenure must be positive.');
+
+  const homeLoanRate = homeLoanRatePercent / 100;
+  const homeLoanTenureMonths = homeLoanTenureYears * 12;
+  const loanToValue = 1 - downPaymentPercent / 100;
+  const propertyAppreciationRate = propertyAppreciationPercent / 100;
+  const sweepRate = reinvestmentRatePercent / 100;
+  const rentalYield = rentalYieldPercent / 100;
+  const maintenanceShareOfBudget = maintenancePercentOfBudget / 100;
+  const propertyTaxShareOfAnnualBudget = propertyTaxPercentOfAnnualBudget / 100;
 
   const startFy = currentFy();
   const incomeTaxRules = getIncomeTaxRules(startFy);
@@ -130,9 +200,9 @@ export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult 
   if (!hyderabadRates) throw new Error('buildLayerOneComparison: Telangana municipal_corporation stamp-duty rates are not shipped.');
 
   // --- Size the Buy scenario from the stated budget ---
-  const targetEmi = inputs.monthlyHousingBudget * (1 - MAINTENANCE_SHARE_OF_BUDGET);
-  const loanPrincipal = principalForEmi(targetEmi, HOME_LOAN_RATE, HOME_LOAN_TENURE_MONTHS);
-  const propertyPrice = loanPrincipal / LOAN_TO_VALUE;
+  const targetEmi = inputs.monthlyHousingBudget * (1 - maintenanceShareOfBudget);
+  const loanPrincipal = principalForEmi(targetEmi, homeLoanRate, homeLoanTenureMonths);
+  const propertyPrice = loanPrincipal / loanToValue;
   const entryCosts = stampDutyAndRegistrationCost(propertyPrice, hyderabadRates);
 
   const buyScenario: Scenario = {
@@ -142,10 +212,10 @@ export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult 
       ownedPropertyPosition('buy:home', {
         purchasePrice: propertyPrice,
         entryCosts,
-        loan: { principal: loanPrincipal, annualRate: () => HOME_LOAN_RATE, tenureMonths: HOME_LOAN_TENURE_MONTHS },
+        loan: { principal: loanPrincipal, annualRate: () => homeLoanRate, tenureMonths: homeLoanTenureMonths },
         appreciationSeries: PROPERTY_APPRECIATION_SERIES,
-        maintenancePerMonth: () => Math.round(inputs.monthlyHousingBudget * MAINTENANCE_SHARE_OF_BUDGET),
-        annualPropertyTax: Math.round(inputs.monthlyHousingBudget * 12 * PROPERTY_TAX_SHARE_OF_ANNUAL_BUDGET),
+        maintenancePerMonth: () => Math.round(inputs.monthlyHousingBudget * maintenanceShareOfBudget),
+        annualPropertyTax: Math.round(inputs.monthlyHousingBudget * 12 * propertyTaxShareOfAnnualBudget),
         liquidityTier: 2,
       }),
     ],
@@ -156,8 +226,8 @@ export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult 
   };
 
   // --- Rent an equivalent home; the equalisation sweep invests the rest of the budget ---
-  const assumedMonthlyRent = Math.round((propertyPrice * ASSUMED_GROSS_RENTAL_YIELD) / 12);
-  const securityDeposit = assumedMonthlyRent * SECURITY_DEPOSIT_MONTHS;
+  const assumedMonthlyRent = Math.round((propertyPrice * rentalYield) / 12);
+  const securityDeposit = assumedMonthlyRent * securityDepositMonths;
 
   const rentScenario: Scenario = {
     id: 'rent',
@@ -169,19 +239,19 @@ export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult 
   };
 
   const assumptions: AssumptionSeries[] = [
-    { id: PROPERTY_APPRECIATION_SERIES, rate: PROPERTY_APPRECIATION_RATE, label: 'Property appreciation — conservative default' },
-    { id: SWEEP_SERIES, rate: SWEEP_RATE, label: 'Default reinvestment instrument (broad index fund) — shared by both scenarios' },
+    { id: PROPERTY_APPRECIATION_SERIES, rate: propertyAppreciationRate, label: 'Property appreciation' },
+    { id: SWEEP_SERIES, rate: sweepRate, label: 'Reinvestment instrument (broad index fund) — shared by both scenarios' },
   ];
   const ctx = buildMarketContext(assumptions);
 
   const grossSalaryAnnual = solveGrossSalaryForNetIncome(
     inputs.monthlyHouseholdIncomeNet * 12,
-    { regime: HOUSEHOLD_REGIME, age: HOUSEHOLD_AGE },
+    { regime: householdRegime, age: householdAge },
     incomeTaxRules,
   );
   const household: HouseholdTaxConfig = {
-    regime: HOUSEHOLD_REGIME,
-    age: HOUSEHOLD_AGE,
+    regime: householdRegime,
+    age: householdAge,
     grossSalaryAnnual: () => grossSalaryAnnual,
   };
 
@@ -205,8 +275,15 @@ export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult 
     startFy,
     horizonsMonths: HORIZONS_MONTHS,
     selectedHorizonMonths,
-    buy: { propertyPrice, loanPrincipal, entryCosts },
-    rent: { assumedMonthlyRent, securityDeposit },
+    buy: {
+      propertyPrice,
+      loanPrincipal,
+      entryCosts,
+      loanRatePercent: homeLoanRatePercent,
+      tenureYears: homeLoanTenureYears,
+      downPaymentPercent,
+    },
+    rent: { assumedMonthlyRent, securityDeposit, rentalYieldPercent, securityDepositMonths },
     assumptions,
   };
 }
@@ -237,7 +314,9 @@ export function computeHurdleSentence(layerOne: LayerOneResult): HurdleSentence 
   const laggingScenarioName = buyLeads ? 'Renting & investing' : 'Buying';
   const targetTerminalNetWorth = buyLeads ? buyNetWorth : rentNetWorth;
   const seriesToSolve = buyLeads ? SWEEP_SERIES : PROPERTY_APPRECIATION_SERIES;
-  const assumedRate = buyLeads ? SWEEP_RATE : PROPERTY_APPRECIATION_RATE;
+  // Phase 9.2: both rates are now user-overridable, so the assumed rate shown must be read back
+  // off this comparison's own resolved assumptions rather than a fixed module constant.
+  const assumedRate = layerOne.assumptions.find((a) => a.id === seriesToSolve)?.rate ?? 0;
 
   const frozenTargetByMonth = layerOne.result.scenarios[0]!.equalisedMonthlyOutflow;
 

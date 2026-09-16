@@ -1,11 +1,27 @@
 import { useMemo, useState } from 'react';
 
 import { formatINR } from '@fincalc/ui';
+import type { AgeBand, TaxRegime } from '@fincalc/engine';
 
 import { Amount } from '../../components/Amount';
-import { Callout, CalcShell, NumberField, SubmitButton } from '../../components/CalcShell';
+import { Callout, CalcShell, NumberField, SelectField, SubmitButton } from '../../components/CalcShell';
 import { ResultChart } from '../../components/ResultChart';
-import { buildLayerOneComparison, SUPPORTED_CITIES, type LayerOneResult } from '../../lib/scenario-builder';
+import {
+  buildLayerOneComparison,
+  DEFAULT_DOWN_PAYMENT_PERCENT,
+  DEFAULT_HOME_LOAN_RATE_PERCENT,
+  DEFAULT_HOME_LOAN_TENURE_YEARS,
+  DEFAULT_HOUSEHOLD_AGE,
+  DEFAULT_HOUSEHOLD_REGIME,
+  DEFAULT_MAINTENANCE_PERCENT_OF_BUDGET,
+  DEFAULT_PROPERTY_APPRECIATION_PERCENT,
+  DEFAULT_PROPERTY_TAX_PERCENT_OF_ANNUAL_BUDGET,
+  DEFAULT_REINVESTMENT_RATE_PERCENT,
+  DEFAULT_RENTAL_YIELD_PERCENT,
+  DEFAULT_SECURITY_DEPOSIT_MONTHS,
+  SUPPORTED_CITIES,
+  type LayerOneResult,
+} from '../../lib/scenario-builder';
 
 /**
  * Door 2 ("Should I rent or buy?") and Tier 1's "Rent vs Buy" module
@@ -21,6 +37,14 @@ import { buildLayerOneComparison, SUPPORTED_CITIES, type LayerOneResult } from '
  * shape the Comparator already draws with `ResultChart` — reused as-is
  * rather than redrawn, since `layerOne.result`/`horizonsMonths` are the
  * same `ComparisonResult` shape in both places.
+ *
+ * Phase 9.2 (user feedback: "other than household income and monthly
+ * housing budget, everything else is a blackbox... the user should be
+ * able to engage all the available levers"): every documented default in
+ * scenario-builder.ts is now a field here too, pre-filled with that same
+ * DEFAULT_* constant and fully editable — moving a lever (say, the loan
+ * rate or the assumed rental yield) visibly moves the sized home price,
+ * the assumed rent, and every downstream result.
  */
 interface BreakEven {
   crosses: boolean;
@@ -30,6 +54,16 @@ interface BreakEven {
 }
 
 const BREAK_EVEN_YEARS = [5, 10, 15, 25] as const;
+
+const REGIME_OPTIONS: { value: TaxRegime; label: string }[] = [
+  { value: 'new', label: 'New regime' },
+  { value: 'old', label: 'Old regime' },
+];
+const AGE_OPTIONS: { value: AgeBand; label: string }[] = [
+  { value: 'under60', label: 'Under 60' },
+  { value: '60to79', label: '60–79 (senior citizen)' },
+  { value: '80plus', label: '80+ (super senior)' },
+];
 
 function computeBreakEven(layerOne: LayerOneResult | null): BreakEven | null {
   if (!layerOne) return null;
@@ -49,6 +83,17 @@ function computeBreakEven(layerOne: LayerOneResult | null): BreakEven | null {
 export function RentVsBuy() {
   const [monthlyIncome, setMonthlyIncome] = useState(450_000);
   const [monthlyBudget, setMonthlyBudget] = useState(155_000);
+  const [homeLoanRatePercent, setHomeLoanRatePercent] = useState(DEFAULT_HOME_LOAN_RATE_PERCENT);
+  const [homeLoanTenureYears, setHomeLoanTenureYears] = useState(DEFAULT_HOME_LOAN_TENURE_YEARS);
+  const [downPaymentPercent, setDownPaymentPercent] = useState(DEFAULT_DOWN_PAYMENT_PERCENT);
+  const [propertyAppreciationPercent, setPropertyAppreciationPercent] = useState(DEFAULT_PROPERTY_APPRECIATION_PERCENT);
+  const [reinvestmentRatePercent, setReinvestmentRatePercent] = useState(DEFAULT_REINVESTMENT_RATE_PERCENT);
+  const [rentalYieldPercent, setRentalYieldPercent] = useState(DEFAULT_RENTAL_YIELD_PERCENT);
+  const [maintenancePercentOfBudget, setMaintenancePercentOfBudget] = useState(DEFAULT_MAINTENANCE_PERCENT_OF_BUDGET);
+  const [propertyTaxPercentOfAnnualBudget, setPropertyTaxPercentOfAnnualBudget] = useState(DEFAULT_PROPERTY_TAX_PERCENT_OF_ANNUAL_BUDGET);
+  const [securityDepositMonths, setSecurityDepositMonths] = useState(DEFAULT_SECURITY_DEPOSIT_MONTHS);
+  const [householdRegime, setHouseholdRegime] = useState<TaxRegime>(DEFAULT_HOUSEHOLD_REGIME);
+  const [householdAge, setHouseholdAge] = useState<AgeBand>(DEFAULT_HOUSEHOLD_AGE);
   const [submitted, setSubmitted] = useState(false);
 
   const outcome = useMemo<{ ok: true; value: LayerOneResult } | { ok: false; error: string } | null>(() => {
@@ -59,13 +104,39 @@ export function RentVsBuy() {
         monthlyHouseholdIncomeNet: monthlyIncome,
         monthlyHousingBudget: monthlyBudget,
         horizonYears: 25,
+        homeLoanRatePercent,
+        homeLoanTenureYears,
+        downPaymentPercent,
+        propertyAppreciationPercent,
+        reinvestmentRatePercent,
+        rentalYieldPercent,
+        maintenancePercentOfBudget,
+        propertyTaxPercentOfAnnualBudget,
+        securityDepositMonths,
+        householdRegime,
+        householdAge,
       });
       return { ok: true, value };
     } catch (e) {
       const message = e instanceof Error ? e.message : "Something about these numbers didn't compute. Try different values.";
       return { ok: false, error: message };
     }
-  }, [submitted, monthlyIncome, monthlyBudget]);
+  }, [
+    submitted,
+    monthlyIncome,
+    monthlyBudget,
+    homeLoanRatePercent,
+    homeLoanTenureYears,
+    downPaymentPercent,
+    propertyAppreciationPercent,
+    reinvestmentRatePercent,
+    rentalYieldPercent,
+    maintenancePercentOfBudget,
+    propertyTaxPercentOfAnnualBudget,
+    securityDepositMonths,
+    householdRegime,
+    householdAge,
+  ]);
 
   const layerOne = outcome?.ok ? outcome.value : null;
   const error = outcome && !outcome.ok ? outcome.error : null;
@@ -100,6 +171,60 @@ export function RentVsBuy() {
           </label>
           <NumberField label="Household income, per month (take-home)" value={monthlyIncome} onChange={setMonthlyIncome} />
           <NumberField label="Monthly housing budget" value={monthlyBudget} onChange={setMonthlyBudget} />
+
+          <div className="mt-1 flex flex-col gap-1">
+            <p className="text-sm text-ink">Assumptions — adjust any of these</p>
+            <p className="text-xs text-ink-muted">Pre-filled with our conservative defaults. Every one below drives the result.</p>
+          </div>
+          <NumberField label="Home loan interest rate, annual (%)" value={homeLoanRatePercent} onChange={setHomeLoanRatePercent} min={0} max={20} step={0.1} />
+          <NumberField label="Home loan tenure (years)" value={homeLoanTenureYears} onChange={setHomeLoanTenureYears} min={1} max={30} step={1} />
+          <NumberField label="Down payment (%)" value={downPaymentPercent} onChange={setDownPaymentPercent} min={5} max={90} step={1} />
+          <NumberField
+            label="Property appreciation, annual (%)"
+            value={propertyAppreciationPercent}
+            onChange={setPropertyAppreciationPercent}
+            min={0}
+            max={20}
+            step={0.1}
+          />
+          <NumberField
+            label="Reinvestment return (index fund), annual (%)"
+            value={reinvestmentRatePercent}
+            onChange={setReinvestmentRatePercent}
+            min={0}
+            max={25}
+            step={0.1}
+            hint="What the budget's surplus compounds at in both scenarios."
+          />
+          <NumberField
+            label="Assumed gross rental yield (%)"
+            value={rentalYieldPercent}
+            onChange={setRentalYieldPercent}
+            min={0.5}
+            max={10}
+            step={0.1}
+            hint="Sizes the assumed rent for an equivalent home."
+          />
+          <NumberField
+            label="Maintenance (% of monthly budget)"
+            value={maintenancePercentOfBudget}
+            onChange={setMaintenancePercentOfBudget}
+            min={0}
+            max={10}
+            step={0.5}
+          />
+          <NumberField
+            label="Property tax (% of annual budget)"
+            value={propertyTaxPercentOfAnnualBudget}
+            onChange={setPropertyTaxPercentOfAnnualBudget}
+            min={0}
+            max={5}
+            step={0.1}
+          />
+          <NumberField label="Security deposit (months' rent)" value={securityDepositMonths} onChange={setSecurityDepositMonths} min={0} max={12} step={1} />
+          <SelectField label="Tax regime" value={householdRegime} onChange={setHouseholdRegime} options={REGIME_OPTIONS} />
+          <SelectField label="Age" value={householdAge} onChange={setHouseholdAge} options={AGE_OPTIONS} />
+
           <SubmitButton>Compare →</SubmitButton>
         </form>
       }
@@ -161,7 +286,22 @@ export function RentVsBuy() {
                 <li key={a.id}>{a.label}: <span className="font-mono tabular-nums text-ink">{(a.rate * 100).toFixed(1)}%</span></li>
               ))}
               <li>Sized home: <Amount value={layerOne.buy.propertyPrice} className="text-ink" /> ({formatINR(layerOne.buy.loanPrincipal, { compact: true })} loan)</li>
+              <li>
+                Home loan: <span className="font-mono tabular-nums text-ink">{layerOne.buy.loanRatePercent.toFixed(1)}%</span> for{' '}
+                <span className="font-mono tabular-nums text-ink">{layerOne.buy.tenureYears}yr</span>,{' '}
+                <span className="font-mono tabular-nums text-ink">{layerOne.buy.downPaymentPercent.toFixed(0)}%</span> down
+              </li>
               <li>Assumed rent: <Amount value={layerOne.rent.assumedMonthlyRent} className="text-ink" />/month</li>
+              <li>
+                Rental yield: <span className="font-mono tabular-nums text-ink">{layerOne.rent.rentalYieldPercent.toFixed(1)}%</span>, security deposit{' '}
+                <span className="font-mono tabular-nums text-ink">{layerOne.rent.securityDepositMonths}</span> months
+              </li>
+              <li>
+                Tax regime: <span className="text-ink">{layerOne.household.regime === 'new' ? 'New' : 'Old'}</span>, age{' '}
+                <span className="text-ink">
+                  {layerOne.household.age === 'under60' ? 'under 60' : layerOne.household.age === '60to79' ? '60–79' : '80+'}
+                </span>
+              </li>
             </ul>
           </div>
         </section>
