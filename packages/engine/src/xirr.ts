@@ -52,6 +52,26 @@ function scaleOf(cashflows: Cashflow[]): number {
   return Math.max(1, ...cashflows.map((cf) => Math.abs(cf.amount)));
 }
 
+/**
+ * Estimates the worst-case floating-point rounding error accumulated while summing NPV terms at
+ * `rate`. When a candidate rate sits close to -1, `(1 + rate) ^ years` can shrink towards zero for
+ * cashflows far from the reference date, blowing individual terms up to many orders of magnitude
+ * larger than the cashflow amounts themselves before they (mostly) cancel back down. Double-precision
+ * arithmetic only carries ~15-17 significant digits, so once the terms being summed are that much
+ * larger than the sum they're expected to produce, the residual is numerically meaningless — it can
+ * come out as anything from 0 to a large number purely depending on summation order, not because the
+ * candidate rate is actually a good root. This bound (sum of absolute term magnitudes, scaled by
+ * machine epsilon and the term count) catches that case so it can be rejected rather than trusted.
+ */
+function npvNoiseFloor(cashflows: Cashflow[], rate: number): number {
+  const first = cashflows[0]!.date;
+  const sumOfAbsTerms = cashflows.reduce(
+    (sum, cf) => sum + Math.abs(cf.amount / Math.pow(1 + rate, yearsFrom(first, cf.date))),
+    0,
+  );
+  return sumOfAbsTerms * Number.EPSILON * cashflows.length;
+}
+
 function assertSolvable(cashflows: Cashflow[]): void {
   if (cashflows.length < 2) {
     throw new RangeError('xirr: need at least two cashflows');
@@ -124,7 +144,15 @@ export function xirr(cashflows: Cashflow[], guess = 0.1): number {
   const newtonConverged = Number.isFinite(rate) && Math.abs(npv(sorted, rate)) < scale * 1e-6;
   const solved = newtonConverged ? rate : xirrByBisection(sorted);
 
-  if (Math.abs(npv(sorted, solved)) > scale * RESIDUAL_TOLERANCE) {
+  // A residual within tolerance only means something if the arithmetic that produced it is
+  // trustworthy. When the candidate rate is close enough to -1 that summing the NPV terms involves
+  // severe cancellation (see npvNoiseFloor), the residual can look small by coincidence of summation
+  // order while the true, order-independent NPV is not actually near zero — so a candidate is only
+  // accepted when both the residual and the estimated floating-point noise floor clear the tolerance.
+  const tolerance = scale * RESIDUAL_TOLERANCE;
+  const residual = Math.abs(npv(sorted, solved));
+  const noiseFloor = npvNoiseFloor(sorted, solved);
+  if (residual > tolerance || noiseFloor > tolerance) {
     throw new RangeError('xirr: could not converge to a reliable solution for these cashflows');
   }
 
