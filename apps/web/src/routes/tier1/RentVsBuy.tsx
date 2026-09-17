@@ -137,6 +137,19 @@ import {
  * Allocation Comparator's own budget-driven flow is untouched). The stat
  * row's surplus formula simplifies to exactly `EMI − rent`, dropping the
  * maintenance term.
+ *
+ * Phase 9.7 (immediate follow-up: "what does the graph exactly show?
+ * mention that somewhere clearly" + a "Home purchase & loan" layout
+ * request): a one-line caption now sits directly above the trajectory
+ * chart explaining what it plots and what the dashed reference lines
+ * mean, rather than leaving that to the axis labels and legend alone.
+ * Separately, the "Home purchase & loan" box's four fields no longer sit
+ * in the generic two-per-row `LeverGroup` grid every other box uses —
+ * this one box gets a two-column split with a vertical divider: Base
+ * flat price plus a new, previously-buried `Loan amount` readout on the
+ * left (the loan amount was only ever visible parenthetically in the
+ * bottom assumptions panel before this), Down payment/loan rate/tenure
+ * stacked on the right.
  */
 interface BreakEven {
   crosses: boolean;
@@ -323,6 +336,11 @@ export function RentVsBuy() {
   );
   const displayedMonthlyRent = monthlyRentOverride ?? autoMonthlyRent;
 
+  // Phase 9.7: a simple derived readout for the "Home purchase & loan" box
+  // — previously only visible parenthetically in the bottom assumptions
+  // panel ("(₹X loan)"). Cheap arithmetic, no memo needed.
+  const loanAmount = homePrice * (1 - downPaymentPercent / 100);
+
   const outcome = useMemo<{ ok: true; value: LayerOneResult } | { ok: false; error: string } | null>(() => {
     if (!submitted) return null;
     try {
@@ -419,16 +437,27 @@ export function RentVsBuy() {
           </p>
 
           <LeverGroup title="Home purchase & loan" defaultOpen>
-            <NumberField
-              label="Base flat price (excl. stamp duty)"
-              hint="The purchase price you're comparing against — everything else in this section sizes the loan and the ongoing costs off it."
-              value={homePrice}
-              onChange={setHomePrice}
-              step={1}
-            />
-            <NumberField label="Down payment (%)" value={downPaymentPercent} onChange={setDownPaymentPercent} min={5} max={90} step={1} />
-            <NumberField label="Loan interest rate, annual (%)" value={homeLoanRatePercent} onChange={setHomeLoanRatePercent} min={0} max={20} step={0.1} />
-            <NumberField label="Loan tenure (years)" value={homeLoanTenureYears} onChange={setHomeLoanTenureYears} min={1} max={30} step={1} />
+            <div className="flex flex-col gap-4 sm:col-span-2 sm:flex-row sm:divide-x sm:divide-hairline">
+              <div className="flex flex-col gap-4 sm:w-1/2 sm:pr-4">
+                <NumberField
+                  label="Base flat price (excl. stamp duty)"
+                  hint="The purchase price you're comparing against — everything else in this section sizes the loan and the ongoing costs off it."
+                  value={homePrice}
+                  onChange={setHomePrice}
+                  step={1}
+                />
+                <div className="flex flex-col gap-1 text-sm">
+                  <span className="text-xs text-ink-muted">Loan amount</span>
+                  <Amount value={loanAmount} className="text-base text-ink" />
+                  <span className="text-xs text-ink-muted">Flat price minus down payment.</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-4 sm:w-1/2 sm:pl-4">
+                <NumberField label="Down payment (%)" value={downPaymentPercent} onChange={setDownPaymentPercent} min={5} max={90} step={1} />
+                <NumberField label="Loan interest rate, annual (%)" value={homeLoanRatePercent} onChange={setHomeLoanRatePercent} min={0} max={20} step={0.1} />
+                <NumberField label="Loan tenure (years)" value={homeLoanTenureYears} onChange={setHomeLoanTenureYears} min={1} max={30} step={1} />
+              </div>
+            </div>
           </LeverGroup>
 
           <LeverGroup title="Rent scenario" defaultOpen>
@@ -541,19 +570,25 @@ export function RentVsBuy() {
             </div>
           </div>
 
-          <NetWorthTrajectoryChart
-            data={trajectory.map((p) => ({
-              year: p.year,
-              [layerOne.scenarios[0].name]: p.buyNetWorth,
-              [layerOne.scenarios[1].name]: p.rentNetWorth,
-            }))}
-            seriesAKey={layerOne.scenarios[0].name}
-            seriesAName={layerOne.scenarios[0].name}
-            seriesBKey={layerOne.scenarios[1].name}
-            seriesBName={layerOne.scenarios[1].name}
-            crossoverYears={crossoverYears}
-            ariaLabel={`Net worth by year, ${layerOne.scenarios[0].name} versus ${layerOne.scenarios[1].name}`}
-          />
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-ink">
+              Net worth by year — what each path leaves you with after tax and exit costs, assuming every month's
+              surplus is reinvested. Dashed lines mark the years the lead changes.
+            </p>
+            <NetWorthTrajectoryChart
+              data={trajectory.map((p) => ({
+                year: p.year,
+                [layerOne.scenarios[0].name]: p.buyNetWorth,
+                [layerOne.scenarios[1].name]: p.rentNetWorth,
+              }))}
+              seriesAKey={layerOne.scenarios[0].name}
+              seriesAName={layerOne.scenarios[0].name}
+              seriesBKey={layerOne.scenarios[1].name}
+              seriesBName={layerOne.scenarios[1].name}
+              crossoverYears={crossoverYears}
+              ariaLabel={`Net worth by year, ${layerOne.scenarios[0].name} versus ${layerOne.scenarios[1].name}`}
+            />
+          </div>
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[320px] border-collapse text-sm">
