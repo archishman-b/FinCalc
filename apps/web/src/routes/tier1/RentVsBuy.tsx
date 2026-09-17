@@ -174,6 +174,18 @@ import {
  * same-year "sale" is taxed at the least favourable (short-term) rate —
  * nobody's meant to actually sell in year 1, this is a same-day
  * mark-to-market snapshot so every year compares on equal footing.
+ *
+ * Immediate follow-up on that same change ("would you present such a long
+ * paragraph in an app? is it user friendly? show the calculation behind a
+ * '?' mark or 'i' icon"): the six-sentence explanation was genuinely too
+ * long to sit as always-visible body copy. The caption reverts to its
+ * short Phase 9.7 form; the arithmetic now lives behind a small "i" badge
+ * next to it, built with `<details>`/`<summary>` rather than a
+ * JS-driven/absolutely-positioned tooltip — consistent with `LeverGroup`
+ * above and this file's established bias toward the platform's own
+ * disclosure widget (free, keyboard-accessible, and it expands inline
+ * rather than needing viewport-edge collision handling on narrow mobile
+ * screens, where hover tooltips don't work anyway).
  */
 interface BreakEven {
   crosses: boolean;
@@ -595,14 +607,24 @@ export function RentVsBuy() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <p className="text-sm text-ink">
-              Net worth by year — what each path would leave you with if you exited that year. For Buy: today's home
-              value after appreciation, minus what's still owed on the loan, minus the tax and costs of selling. For
-              Rent: the down payment plus every month's EMI-vs-rent gap, invested and grown, minus tax on cashing
-              out. Early years favour Rent because that gap starts as one big lump (roughly the down payment plus
-              stamp duty) invested from month one, while Buy is still carrying entry costs and a short-term sale
-              would be taxed hardest. Dashed lines mark the years the lead changes.
-            </p>
+            <div className="text-sm text-ink">
+              Net worth by year — what each path leaves you with after tax and exit costs, assuming every month's
+              surplus is reinvested. Dashed lines mark the years the lead changes.{' '}
+              <details className="inline-block">
+                <summary
+                  aria-label="How this is calculated"
+                  className="inline-flex h-4 w-4 translate-y-[3px] cursor-pointer select-none list-none items-center justify-center rounded-full border border-hairline text-[10px] leading-none text-ink-muted hover:border-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden"
+                >
+                  i
+                </summary>
+                <p className="mt-2 max-w-md text-xs text-ink-muted">
+                  Buy: home value after appreciation, minus the remaining loan, minus tax and costs on a same-year
+                  sale. Rent: the down payment plus every month's EMI-vs-rent gap, invested and grown, minus tax on
+                  exit. Rent usually leads early because that gap starts as one lump sum invested from month one,
+                  while Buy is still absorbing entry costs and short-term capital-gains tax.
+                </p>
+              </details>
+            </div>
             <NetWorthTrajectoryChart
               data={trajectory.map((p) => ({
                 year: p.year,
