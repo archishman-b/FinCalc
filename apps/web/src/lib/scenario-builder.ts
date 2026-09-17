@@ -50,6 +50,20 @@
  * the same auto-sizing arithmetic `buildLayerOneComparison` always used,
  * exported standalone so RentVsBuy.tsx can preview the auto-computed
  * figure live — one formula, not two copies that could drift apart.
+ *
+ * Phase 9.4 (user feedback, looking at the Phase 9.3 form and chart:
+ * "the annual appreciation & returns on surplus are the main levers for
+ * simulating scenarios... in the graph, instead of bars... line charts
+ * would be better... showing the year on year change, as well as the
+ * possible cutovers"): `buildAnnualNetWorthTrajectory` below re-runs
+ * `compare()` a second time for an already-built `LayerOneResult`, with
+ * one horizon per year instead of the four canonical buckets, purely so
+ * RentVsBuy.tsx can plot a real year-by-year line and find every year the
+ * two scenarios' net worth actually crosses — not just report the nearest
+ * of 5/10/15/25. `buildLayerOneComparison` itself is unchanged: its four
+ * canonical horizons still drive the results table, the hurdle-rate
+ * solver, the flagship Comparator's own table, Monte Carlo and CSV
+ * export, none of which asked for finer granularity.
  */
 import {
   getCostInflationIndexRules,
@@ -363,11 +377,46 @@ export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult 
   };
 }
 
+/**
+ * Phase 9.4: a year-by-year net worth trajectory for both scenarios in an
+ * already-built `LayerOneResult` — see the module doc comment. Reuses the
+ * exact `scenarios`/`ctx`/`startFy`/`household` that comparison already
+ * built (never a second, potentially-drifting reconstruction of the
+ * Buy/Rent scenarios themselves) and asks `compare()` for one horizon per
+ * year instead of the four canonical buckets. `maxYears` defaults to the
+ * longest of those four buckets (25, today), so the trajectory always
+ * covers the same span the results table's last row does.
+ */
+export interface AnnualNetWorthPoint {
+  year: number;
+  buyNetWorth: number;
+  rentNetWorth: number;
+}
+
+export function buildAnnualNetWorthTrajectory(layerOne: LayerOneResult, maxYears?: number): AnnualNetWorthPoint[] {
+  const years = maxYears ?? Math.max(...layerOne.horizonsMonths) / 12;
+  const horizonsMonths = Array.from({ length: years }, (_, i) => (i + 1) * 12);
+  const result = compare({
+    scenarios: [...layerOne.scenarios],
+    ctx: layerOne.ctx,
+    horizonsMonths,
+    startFy: layerOne.startFy,
+    household: layerOne.household,
+    cii: getCostInflationIndexRules(),
+  });
+  const [buy, rent] = result.scenarios;
+  return horizonsMonths.map((months, i) => ({
+    year: months / 12,
+    buyNetWorth: buy!.perHorizon[i]!.terminalNetWorth,
+    rentNetWorth: rent!.perHorizon[i]!.terminalNetWorth,
+  }));
+}
+
 export interface HurdleSentence {
   /** Which scenario is behind at the selected horizon and needs the higher rate. */
   laggingScenarioName: string;
   leadingScenarioName: string;
-  /** The rate the lagging scenario's own growth series would need to compound at to match the leader — null if solveHurdleRate couldn't bracket a solution in a plausible range. */
+  /** The rate the lagging scenario's own growth assumption would need to compound at to match the leader — null if solveHurdleRate couldn't bracket a solution in a plausible range. */
   requiredRate: number | null;
   assumedRate: number;
 }

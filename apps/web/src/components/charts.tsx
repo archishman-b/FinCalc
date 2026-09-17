@@ -7,7 +7,9 @@ import {
   Cell,
   Legend,
   Line,
+  LineChart,
   ComposedChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -298,6 +300,84 @@ export function GroupedComparisonChart({
           <Bar isAnimationActive={false} dataKey="a" name={seriesAName} fill={palette.ink} radius={[2, 2, 0, 0]} />
           <Bar isAnimationActive={false} dataKey="b" name={seriesBName} fill={palette.rust} radius={[2, 2, 0, 0]} />
         </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/**
+ * Phase 9.4 (user feedback: "instead of bars... line charts would be
+ * better... showing the year on year change, as well as the possible
+ * cutovers"): two net-worth trajectories plotted as continuous lines over
+ * every year of the horizon, with a vertical reference line marking each
+ * year the two series actually cross. Rent vs Buy's replacement for
+ * ResultChart.tsx's four-bucket bar chart — ResultChart itself is
+ * untouched and still used by the flagship Comparator, whose own results
+ * table and CSV export depend on those same four discrete horizons.
+ */
+export function NetWorthTrajectoryChart({
+  data,
+  seriesAKey,
+  seriesAName,
+  seriesBKey,
+  seriesBName,
+  crossoverYears,
+  ariaLabel,
+}: {
+  data: { year: number; [key: string]: number }[];
+  seriesAKey: string;
+  seriesAName: string;
+  seriesBKey: string;
+  seriesBName: string;
+  crossoverYears: readonly number[];
+  ariaLabel: string;
+}) {
+  const palette = usePalette();
+  return (
+    <div className="h-80 w-full" role="img" aria-label={ariaLabel}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={palette.hairline} vertical={false} />
+          <XAxis
+            dataKey="year"
+            tickFormatter={(v: number) => `Yr ${v}`}
+            tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
+            axisLine={{ stroke: palette.hairline }}
+            tickLine={false}
+          />
+          <YAxis
+            tickFormatter={(v: number) => formatINR(v, { compact: true, decimals: 0 })}
+            tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
+            axisLine={false}
+            tickLine={false}
+            width={64}
+          />
+          <Tooltip
+            formatter={(v, name) => [formatINR(Number(v), { compact: true }), name]}
+            labelFormatter={(v) => `Year ${v}`}
+            contentStyle={{
+              fontFamily: 'ui-monospace, monospace',
+              fontSize: 13,
+              background: palette.paper,
+              border: `1px solid ${palette.hairline}`,
+              borderRadius: 4,
+              color: palette.ink,
+            }}
+          />
+          <Legend wrapperStyle={{ ...LEGEND_STYLE, color: palette.ink }} />
+          {crossoverYears.map((y) => (
+            <ReferenceLine
+              key={y}
+              x={y}
+              stroke={palette.ink}
+              strokeOpacity={0.45}
+              strokeDasharray="4 4"
+              label={{ value: `Crosses Yr ${y}`, position: 'insideTopLeft', fill: palette.inkMuted, fontSize: 11 }}
+            />
+          ))}
+          <Line isAnimationActive={false} type="monotone" dataKey={seriesAKey} name={seriesAName} stroke={palette.rust} strokeWidth={2} dot={false} />
+          <Line isAnimationActive={false} type="monotone" dataKey={seriesBKey} name={seriesBName} stroke={palette.moss} strokeWidth={2} dot={false} />
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );

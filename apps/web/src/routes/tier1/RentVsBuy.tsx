@@ -5,9 +5,10 @@ import type { AgeBand, TaxRegime } from '@fincalc/engine';
 
 import { Amount } from '../../components/Amount';
 import { Callout, CalcShell, NumberField, SelectField, SubmitButton } from '../../components/CalcShell';
-import { ResultChart } from '../../components/ResultChart';
+import { NetWorthTrajectoryChart } from '../../components/charts';
 import {
   buildLayerOneComparison,
+  buildAnnualNetWorthTrajectory,
   estimateHomeSizingFromBudget,
   estimateMonthlyRentFromPrice,
   DEFAULT_DOWN_PAYMENT_PERCENT,
@@ -22,6 +23,7 @@ import {
   DEFAULT_RENTAL_YIELD_PERCENT,
   DEFAULT_SECURITY_DEPOSIT_MONTHS,
   SUPPORTED_CITIES,
+  type AnnualNetWorthPoint,
   type LayerOneResult,
 } from '../../lib/scenario-builder';
 
@@ -32,19 +34,17 @@ import {
  * break-even year — so both route here rather than duplicating the
  * Allocation Comparator's Buy-vs-Rent-and-invest mechanism a second time.
  * `buildLayerOneComparison` already computes all four horizons (5/10/15/25
- * years) in one call; this page reads the break-even year straight off
- * that table instead of re-running the comparison per horizon.
+ * years) in one call; the results table below reads straight off that.
  *
- * Phase 9.1: the terminal-net-worth-by-horizon chart is the exact same
- * shape the Comparator already draws with `ResultChart` — reused as-is
- * rather than redrawn, since `layerOne.result`/`horizonsMonths` are the
- * same `ComparisonResult` shape in both places.
+ * Phase 9.1: desktop layout and real charts (see CalcShell.tsx and
+ * charts.tsx module doc comments).
  *
- * Phase 9.2 (user feedback: "other than household income and monthly
- * housing budget, everything else is a blackbox... the user should be
- * able to engage all the available levers"): every documented default in
- * scenario-builder.ts became a field here too, pre-filled with that same
- * DEFAULT_* constant and fully editable.
+ * Phase 9.2 (user feedback: "other than Household income... Monthly
+ * housing budget, everything else is a blackbox for the user... the user
+ * should be able to engage all the available levers to move the various
+ * metrics."): every documented default in scenario-builder.ts became a
+ * field here too, pre-filled with that same DEFAULT_* constant and fully
+ * editable.
  *
  * Phase 9.3, two follow-up pieces of feedback on that form:
  *
@@ -57,36 +57,58 @@ import {
  * arithmetic `buildLayerOneComparison` itself uses) until the user types
  * their own number, at which point it "sticks" — further changes to the
  * budget or loan terms stop moving it — and a "Reset to auto" link puts it
- * back in sync. This is a spreadsheet-cell mental model (an unedited
- * formula cell vs. a hard-coded one), not a toggle, because it needs no
- * extra state beyond "has the user typed a number here yet."
+ * back in sync.
  *
  * (2) "the list of levers has grown too long. you need to group them
  * thoughtfully & arrange them across the screen in a way that minimizes
- * scroll, both for desktop & mobiles." The thirteen Layer-2 levers (up
- * from eleven, with the two new overrides) are now five `<LeverGroup>`
- * disclosures instead of one flat list: each renders its fields in a
- * `sm:grid-cols-2` grid (so a wide form column shows two fields per row
- * instead of one) and groups by what the lever actually affects — home
- * purchase & loan, rent scenario, ongoing costs, growth & reinvestment,
- * household tax — rather than the order they happened to be added in.
- * The two groups a user is most likely to open first (the ones containing
- * the two just-added overrides) default open; the other three default
- * closed, both collapsing scroll and mirroring the brief's own Layer 2/3
- * progressive-disclosure idea one level further within Layer 2 itself.
- * `<details>` is used deliberately over a React-state accordion — it's
- * free scroll-reduction with zero extra JS state, keyboard-accessible by
- * default, and consistent with this project's "no framework where the
- * platform already does the job" bias (see router.ts's hash routing).
+ * scroll, both for desktop & mobiles." The Layer-2 levers are grouped
+ * into `<LeverGroup>` disclosures by what they affect rather than the
+ * order they happened to be added in, each laying its fields out two per
+ * row from `sm:` up. `<details>` is used deliberately over a React-state
+ * accordion — free scroll-reduction with zero extra JS state,
+ * keyboard-accessible by default, consistent with this project's "no
+ * framework where the platform already does the job" bias (router.ts's
+ * hash routing).
+ *
+ * Phase 9.4, two more pieces of feedback looking at the Phase 9.3 page:
+ *
+ * (1) "every other lever sets the 'as-is' state. the annual appreciation
+ * & returns on surplus are the main levers for simulating scenarios.
+ * bring these to the top above the graph & provide sliders." Property
+ * appreciation and reinvestment return are pulled out of the "Growth &
+ * reinvestment" lever group entirely (that group is gone — it only ever
+ * held these two) and now live as `SliderLever` controls in the results
+ * section, directly above the chart. Every other lever still configures
+ * the household's actual, as-is situation in the collapsible groups below
+ * the submit button; these two are the "what if" dials for exploring the
+ * decision once a baseline exists. No new wiring was needed for the
+ * live-recompute — `outcome`'s memo already depended on
+ * `propertyAppreciationPercent`/`reinvestmentRatePercent`, since every
+ * lever has recomputed reactively since Phase 9.2; only *where* the
+ * control renders changed.
+ *
+ * (2) "in the graph, instead of bars, ... line charts would be better
+ * representations, showing the year on year change, as well as the
+ * possible cutovers." `buildAnnualNetWorthTrajectory` (scenario-builder.ts)
+ * re-runs the same Buy/Rent comparison at one horizon per year instead of
+ * the four canonical buckets, and `NetWorthTrajectoryChart` (charts.tsx)
+ * plots both scenarios as continuous lines with a reference line at every
+ * year the two actually cross — not just the nearest of 5/10/15/25.
+ * `computeBreakEven` below now scans this same year-by-year trajectory,
+ * so the headline sentence is exact ("year 7", not "year 10 or earlier")
+ * without changing its underlying meaning (still the first year Buy's
+ * terminal net worth is at least Rent's). The four-horizon results table,
+ * the hurdle-rate sentence, the assumptions panel, Monte Carlo and CSV
+ * export are all untouched — they read `layerOne.result` directly, which
+ * `buildLayerOneComparison` still computes at exactly the same four
+ * horizons it always has.
  */
 interface BreakEven {
   crosses: boolean;
-  year: 5 | 10 | 15 | 25;
+  year: number;
   buyNW: number;
   rentNW: number;
 }
-
-const BREAK_EVEN_YEARS = [5, 10, 15, 25] as const;
 
 const REGIME_OPTIONS: { value: TaxRegime; label: string }[] = [
   { value: 'new', label: 'New regime' },
@@ -98,19 +120,26 @@ const AGE_OPTIONS: { value: AgeBand; label: string }[] = [
   { value: '80plus', label: '80+ (super senior)' },
 ];
 
-function computeBreakEven(layerOne: LayerOneResult | null): BreakEven | null {
-  if (!layerOne) return null;
-  const [buyComparison, rentComparison] = layerOne.result.scenarios;
-  const crossIndex = layerOne.horizonsMonths.findIndex(
-    (_, i) => buyComparison!.perHorizon[i]!.terminalNetWorth >= rentComparison!.perHorizon[i]!.terminalNetWorth,
-  );
-  const idx = crossIndex === -1 ? layerOne.horizonsMonths.length - 1 : crossIndex;
-  return {
-    crosses: crossIndex !== -1,
-    year: BREAK_EVEN_YEARS[idx]!,
-    buyNW: buyComparison!.perHorizon[idx]!.terminalNetWorth,
-    rentNW: rentComparison!.perHorizon[idx]!.terminalNetWorth,
-  };
+/** The first year (if any, within the trajectory) Buy's net worth is at least Rent's — see the module doc comment, Phase 9.4 point (2). */
+function computeBreakEven(trajectory: readonly AnnualNetWorthPoint[]): BreakEven | null {
+  if (trajectory.length === 0) return null;
+  const crossIndex = trajectory.findIndex((p) => p.buyNetWorth >= p.rentNetWorth);
+  const idx = crossIndex === -1 ? trajectory.length - 1 : crossIndex;
+  const point = trajectory[idx]!;
+  return { crosses: crossIndex !== -1, year: point.year, buyNW: point.buyNetWorth, rentNW: point.rentNetWorth };
+}
+
+/** Every year the two scenarios' net worth actually changes lead — a sign flip in (buy − rent) — for the chart's reference lines. Distinct from `computeBreakEven`, which only reports the first. */
+function computeCrossoverYears(trajectory: readonly AnnualNetWorthPoint[]): number[] {
+  const years: number[] = [];
+  for (let i = 1; i < trajectory.length; i++) {
+    const prevDiff = trajectory[i - 1]!.buyNetWorth - trajectory[i - 1]!.rentNetWorth;
+    const currDiff = trajectory[i]!.buyNetWorth - trajectory[i]!.rentNetWorth;
+    if (prevDiff !== 0 && Math.sign(prevDiff) !== Math.sign(currDiff)) {
+      years.push(trajectory[i]!.year);
+    }
+  }
+  return years;
 }
 
 /** A collapsible group of levers (Phase 9.3) — see the module doc comment for why `<details>` over a state-driven accordion. Fields lay out two-per-row from `sm:` up, one-per-row below it, so a narrow phone never gets a cramped input. */
@@ -127,9 +156,10 @@ function LeverGroup({ title, defaultOpen = false, children }: { title: string; d
  * A NumberField that can be either "auto" (showing a live-computed value
  * driven by other fields) or "overridden" (showing exactly what the user
  * typed, and no longer moving when those other fields change) — see the
- * module doc comment, point (1). `isOverridden` alone decides which state
- * the badge/reset-link shows; the caller is responsible for passing the
- * right `value` for each state (auto-computed or the stored override).
+ * module doc comment, Phase 9.3 point (1). `isOverridden` alone decides
+ * which state the badge/reset-link shows; the caller is responsible for
+ * passing the right `value` for each state (auto-computed or the stored
+ * override).
  */
 function OverridableNumberField({
   label,
@@ -174,6 +204,54 @@ function OverridableNumberField({
         value={Number.isFinite(value) ? value : ''}
         onChange={(e) => onChange(e.target.value === '' ? NaN : Number(e.target.value))}
         className="rounded-sm border border-hairline bg-paper px-3 py-2 font-mono tabular-nums text-ink"
+      />
+      {hint && <span className="text-xs text-ink-muted">{hint}</span>}
+    </label>
+  );
+}
+
+/**
+ * Phase 9.4: a labelled range slider for the two assumptions that most
+ * directly drive "what if" scenario exploration — see the module doc
+ * comment, point (1). Every other lever lives in the collapsible groups
+ * below the submit button and sets the household's as-is baseline; these
+ * two live above the chart instead, because changing them is the point —
+ * dragging either one re-simulates immediately via the same live-recompute
+ * wiring every lever has had since Phase 9.2.
+ */
+function SliderLever({
+  label,
+  hint,
+  value,
+  onChange,
+  min,
+  max,
+  step,
+  format,
+}: {
+  label: string;
+  hint?: string;
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  step: number;
+  format: (v: number) => string;
+}) {
+  return (
+    <label className="flex flex-col gap-1.5 text-sm">
+      <span className="flex items-baseline justify-between gap-2">
+        <span className="text-ink">{label}</span>
+        <span className="font-mono tabular-nums text-rust">{format(value)}</span>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-rust"
       />
       {hint && <span className="text-xs text-ink-muted">{hint}</span>}
     </label>
@@ -276,11 +354,20 @@ export function RentVsBuy() {
   const layerOne = outcome?.ok ? outcome.value : null;
   const error = outcome && !outcome.ok ? outcome.error : null;
 
-  // Deliberately not useMemo: `layerOne` is already the stable output of
-  // the memo above, and this is a cheap read over a 4-element array — a
-  // second memo here isn't worth it, and the equivalent for-loop version
-  // tripped the React Compiler's manual-memoization-preservation check.
-  const breakEven = computeBreakEven(layerOne);
+  // Phase 9.4: the year-by-year trajectory the line chart and the exact
+  // break-even year both read from — a genuine second `compare()` call
+  // (see the module doc comment), so this one is worth memoizing.
+  const trajectory = useMemo<AnnualNetWorthPoint[]>(
+    () => (layerOne ? buildAnnualNetWorthTrajectory(layerOne) : []),
+    [layerOne],
+  );
+
+  // Deliberately not useMemo: cheap linear scans over a ~25-element array
+  // — a second memo here isn't worth it, and the equivalent for-loop
+  // version tripped the React Compiler's manual-memoization-preservation
+  // check when this was last tried (Phase 9.3).
+  const breakEven = computeBreakEven(trajectory);
+  const crossoverYears = computeCrossoverYears(trajectory);
 
   return (
     <CalcShell
@@ -308,7 +395,9 @@ export function RentVsBuy() {
           <NumberField label="Monthly housing budget" value={monthlyBudget} onChange={setMonthlyBudget} />
 
           <p className="text-xs text-ink-muted">
-            Every assumption below is editable, grouped by what it affects. Open a section to see or change its levers.
+            Every assumption below is editable, grouped by what it affects, and sets your as-is baseline. Open a
+            section to see or change its levers. Property appreciation and reinvestment return — the two "what if"
+            dials for exploring the decision — moved above the chart once you compare.
           </p>
 
           <LeverGroup title="Home purchase & loan" defaultOpen>
@@ -360,26 +449,6 @@ export function RentVsBuy() {
             />
           </LeverGroup>
 
-          <LeverGroup title="Growth & reinvestment">
-            <NumberField
-              label="Property appreciation (%)"
-              value={propertyAppreciationPercent}
-              onChange={setPropertyAppreciationPercent}
-              min={0}
-              max={20}
-              step={0.1}
-            />
-            <NumberField
-              label="Reinvestment return (%)"
-              value={reinvestmentRatePercent}
-              onChange={setReinvestmentRatePercent}
-              min={0}
-              max={25}
-              step={0.1}
-              hint="What the budget's surplus compounds at in both scenarios."
-            />
-          </LeverGroup>
-
           <LeverGroup title="Household tax">
             <SelectField label="Tax regime" value={householdRegime} onChange={setHouseholdRegime} options={REGIME_OPTIONS} />
             <SelectField label="Age" value={householdAge} onChange={setHouseholdAge} options={AGE_OPTIONS} />
@@ -405,7 +474,47 @@ export function RentVsBuy() {
             )}
           </p>
 
-          <ResultChart result={layerOne.result} horizonsMonths={layerOne.horizonsMonths} />
+          <div className="rounded-sm border border-hairline p-4">
+            <p className="mb-3 text-sm text-ink">
+              Simulate: the two assumptions that move this decision most. Every other lever in the form sets the
+              as-is baseline — these two are for exploring "what if."
+            </p>
+            <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
+              <SliderLever
+                label="Property appreciation, annual"
+                value={propertyAppreciationPercent}
+                onChange={setPropertyAppreciationPercent}
+                min={0}
+                max={20}
+                step={0.1}
+                format={(v) => `${v.toFixed(1)}%`}
+              />
+              <SliderLever
+                label="Return on invested surplus, annual"
+                value={reinvestmentRatePercent}
+                onChange={setReinvestmentRatePercent}
+                min={0}
+                max={25}
+                step={0.1}
+                format={(v) => `${v.toFixed(1)}%`}
+                hint="What both scenarios' surplus compounds at."
+              />
+            </div>
+          </div>
+
+          <NetWorthTrajectoryChart
+            data={trajectory.map((p) => ({
+              year: p.year,
+              [layerOne.scenarios[0].name]: p.buyNetWorth,
+              [layerOne.scenarios[1].name]: p.rentNetWorth,
+            }))}
+            seriesAKey={layerOne.scenarios[0].name}
+            seriesAName={layerOne.scenarios[0].name}
+            seriesBKey={layerOne.scenarios[1].name}
+            seriesBName={layerOne.scenarios[1].name}
+            crossoverYears={crossoverYears}
+            ariaLabel={`Net worth by year, ${layerOne.scenarios[0].name} versus ${layerOne.scenarios[1].name}`}
+          />
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[320px] border-collapse text-sm">
