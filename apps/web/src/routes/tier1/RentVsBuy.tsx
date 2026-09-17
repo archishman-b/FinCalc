@@ -150,6 +150,30 @@ import {
  * left (the loan amount was only ever visible parenthetically in the
  * bottom assumptions panel before this), Down payment/loan rate/tenure
  * stacked on the right.
+ *
+ * Phase 9.8 (immediate follow-up, looking at a specific year-1 figure on
+ * the chart: "how does the net worth become [X] in year 1? what's the
+ * calculation behind this? include this on the caption as well"): the
+ * Phase 9.7 caption above the chart now spells out the per-scenario
+ * arithmetic, not just what the chart plots. Both scenarios' terminal net
+ * worth are `ownPositionsValueAfterTax + sweepValueAfterTax` from the
+ * engine's own comparator.ts (see that file's `projectScenarioGivenTarget`)
+ * as of the exit month closing that year — i.e. "if you exited today,
+ * after tax." For Buy, `ownPositionsValueAfterTax` is the home's
+ * appreciated value minus the remaining loan balance minus stamp-duty/
+ * exit-cost/capital-gains tax on that notional sale; `sweepValueAfterTax`
+ * is 0 in year 1 for the page's defaults (Buy's own monthly cost already
+ * sets the equalised target every month, so it has no surplus left to
+ * sweep). For Rent, `ownPositionsValueAfterTax` is just the refundable
+ * security deposit; `sweepValueAfterTax` is the invested EMI-vs-rent
+ * gap — a large month-1 lump (target minus rent, which nets out to
+ * roughly the down payment plus entry costs) plus a smaller gap every
+ * month after, compounded at the reinvestment rate and taxed on exit.
+ * This is why Rent usually leads early: its lump-sum month-1 investment
+ * has a year to compound while Buy is still absorbing entry costs and a
+ * same-year "sale" is taxed at the least favourable (short-term) rate —
+ * nobody's meant to actually sell in year 1, this is a same-day
+ * mark-to-market snapshot so every year compares on equal footing.
  */
 interface BreakEven {
   crosses: boolean;
@@ -572,8 +596,12 @@ export function RentVsBuy() {
 
           <div className="flex flex-col gap-2">
             <p className="text-sm text-ink">
-              Net worth by year — what each path leaves you with after tax and exit costs, assuming every month's
-              surplus is reinvested. Dashed lines mark the years the lead changes.
+              Net worth by year — what each path would leave you with if you exited that year. For Buy: today's home
+              value after appreciation, minus what's still owed on the loan, minus the tax and costs of selling. For
+              Rent: the down payment plus every month's EMI-vs-rent gap, invested and grown, minus tax on cashing
+              out. Early years favour Rent because that gap starts as one big lump (roughly the down payment plus
+              stamp duty) invested from month one, while Buy is still carrying entry costs and a short-term sale
+              would be taxed hardest. Dashed lines mark the years the lead changes.
             </p>
             <NetWorthTrajectoryChart
               data={trajectory.map((p) => ({
