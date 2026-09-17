@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
 import { formatINR } from '@fincalc/ui';
-import type { AgeBand, TaxRegime } from '@fincalc/engine';
+import { emi, type AgeBand, type TaxRegime } from '@fincalc/engine';
 
 import { Amount } from '../../components/Amount';
 import { Callout, CalcShell, NumberField, SelectField, SubmitButton } from '../../components/CalcShell';
@@ -102,6 +102,22 @@ import {
  * export are all untouched — they read `layerOne.result` directly, which
  * `buildLayerOneComparison` still computes at exactly the same four
  * horizons it always has.
+ *
+ * Phase 9.5, immediate follow-up feedback on the Phase 9.4 slider panel:
+ * the three numbers that actually explain "what am I comparing" — the
+ * Buy scenario's EMI, the Rent scenario's equivalent rent, and the monthly
+ * surplus renting would free up to invest — were only ever buried in the
+ * assumptions-used panel at the bottom (EMI wasn't even shown there at
+ * all). A three-tile stat row now sits directly below the slider panel,
+ * above the chart, computed straight from `layerOne.buy`/`layerOne.rent`
+ * (`emi()`, the same engine primitive every loan Position is built on, is
+ * the only new call — no new engine plumbing) plus the household's own
+ * maintenance lever, so it's correct even when the home price is entered
+ * directly (Phase 9.3) rather than budget-derived. Deliberately EMI +
+ * maintenance only, not the once-a-year property tax lump sum — folding
+ * an annual charge into a monthly figure would misrepresent it as a
+ * recurring cost, which it isn't (see `real-estate.ts`'s `buildCoreRows`:
+ * property tax posts once every 12th month, never spread monthly).
  */
 interface BreakEven {
   crosses: boolean;
@@ -369,6 +385,13 @@ export function RentVsBuy() {
   const breakEven = computeBreakEven(trajectory);
   const crossoverYears = computeCrossoverYears(trajectory);
 
+  // Phase 9.5: the three headline monthly figures for the stat row above
+  // the chart — see the module doc comment. Cheap, so computed directly
+  // like breakEven/crossoverYears above rather than memoized.
+  const monthlyEmi = layerOne ? emi(layerOne.buy.loanPrincipal, layerOne.buy.loanRatePercent / 100, layerOne.buy.tenureYears * 12) : 0;
+  const maintenancePerMonth = Math.round(monthlyBudget * (maintenancePercentOfBudget / 100));
+  const surplusIfRenting = layerOne ? monthlyEmi + maintenancePerMonth - layerOne.rent.assumedMonthlyRent : 0;
+
   return (
     <CalcShell
       title="Should I rent or buy?"
@@ -499,6 +522,22 @@ export function RentVsBuy() {
                 format={(v) => `${v.toFixed(1)}%`}
                 hint="What both scenarios' surplus compounds at."
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="rounded-sm border border-hairline p-4">
+              <p className="text-xs text-ink-muted">Monthly EMI</p>
+              <Amount value={monthlyEmi} compact={false} className="font-serif-heading text-2xl text-ink" />
+            </div>
+            <div className="rounded-sm border border-hairline p-4">
+              <p className="text-xs text-ink-muted">Equivalent rent</p>
+              <Amount value={layerOne.rent.assumedMonthlyRent} compact={false} className="font-serif-heading text-2xl text-ink" />
+            </div>
+            <div className="rounded-sm border border-hairline p-4">
+              <p className="text-xs text-ink-muted">Surplus invested, if renting</p>
+              <Amount value={surplusIfRenting} compact={false} className="font-serif-heading text-2xl text-rust" />
+              <p className="mt-1 text-xs text-ink-muted">EMI + maintenance, minus rent — swept into the shared investment each month.</p>
             </div>
           </div>
 
