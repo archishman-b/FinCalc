@@ -67,7 +67,9 @@ export function Comparator() {
 
   function handleLoadScenario(inputs: LayerOneInputs) {
     setMonthlyIncome(inputs.monthlyHouseholdIncomeNet);
-    setMonthlyBudget(inputs.monthlyHousingBudget);
+    // Phase 9.6: monthlyHousingBudget became optional on LayerOneInputs for RentVsBuy.tsx's sake;
+    // every scenario the Comparator itself saves always sets it, so this fallback is never live.
+    setMonthlyBudget(inputs.monthlyHousingBudget ?? 155_000);
     setHorizonYears(inputs.horizonYears);
     setSubmitted(true);
   }

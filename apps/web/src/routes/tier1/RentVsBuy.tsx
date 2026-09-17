@@ -9,20 +9,18 @@ import { NetWorthTrajectoryChart } from '../../components/charts';
 import {
   buildLayerOneComparison,
   buildAnnualNetWorthTrajectory,
-  estimateHomeSizingFromBudget,
   estimateMonthlyRentFromPrice,
   DEFAULT_DOWN_PAYMENT_PERCENT,
   DEFAULT_HOME_LOAN_RATE_PERCENT,
   DEFAULT_HOME_LOAN_TENURE_YEARS,
   DEFAULT_HOUSEHOLD_AGE,
   DEFAULT_HOUSEHOLD_REGIME,
-  DEFAULT_MAINTENANCE_PERCENT_OF_BUDGET,
+  DEFAULT_MAINTENANCE_PERCENT_OF_PRICE,
   DEFAULT_PROPERTY_APPRECIATION_PERCENT,
-  DEFAULT_PROPERTY_TAX_PERCENT_OF_ANNUAL_BUDGET,
+  DEFAULT_PROPERTY_TAX_PERCENT_OF_PRICE,
   DEFAULT_REINVESTMENT_RATE_PERCENT,
   DEFAULT_RENTAL_YIELD_PERCENT,
   DEFAULT_SECURITY_DEPOSIT_MONTHS,
-  SUPPORTED_CITIES,
   type AnnualNetWorthPoint,
   type LayerOneResult,
 } from '../../lib/scenario-builder';
@@ -118,6 +116,27 @@ import {
  * an annual charge into a monthly figure would misrepresent it as a
  * recurring cost, which it isn't (see `real-estate.ts`'s `buildCoreRows`:
  * property tax posts once every 12th month, never spread monthly).
+ *
+ * Phase 9.6 (immediate follow-up: "lets simplify the workings. Remove the
+ * city, remove the Monthly housing budget. surplus now = emi - rent"):
+ * two fields come off this form entirely. The City selector already only
+ * ever showed one, disabled option (Hyderabad is still the only city
+ * @fincalc/data ships stamp-duty rates for), so it was pure clutter — the
+ * value is now just hard-coded in the `buildLayerOneComparison` call
+ * below. "Monthly housing budget" was more than clutter: it silently
+ * decided three things at once (the sized home price, and the maintenance
+ * and property-tax allowances), which is exactly the "blackbox" feel
+ * Phase 9.2 was trying to get away from. "Base flat price" now takes its
+ * place as a plain, always-required direct input (no more Auto/override
+ * toggle — `estimateHomeSizingFromBudget` and the auto-sizing preview are
+ * gone from this page); maintenance and property tax move from "% of
+ * budget" to "% of price, annual" accordingly (see
+ * `DEFAULT_MAINTENANCE_PERCENT_OF_PRICE`/`DEFAULT_PROPERTY_TAX_PERCENT_OF_PRICE`
+ * and the Phase 9.6 branch in scenario-builder.ts's
+ * `buildLayerOneComparison` — purely additive there, so the flagship
+ * Allocation Comparator's own budget-driven flow is untouched). The stat
+ * row's surplus formula simplifies to exactly `EMI − rent`, dropping the
+ * maintenance term.
  */
 interface BreakEven {
   crosses: boolean;
@@ -276,48 +295,31 @@ function SliderLever({
 
 export function RentVsBuy() {
   const [monthlyIncome, setMonthlyIncome] = useState(450_000);
-  const [monthlyBudget, setMonthlyBudget] = useState(155_000);
+  const [homePrice, setHomePrice] = useState(22_000_000);
   const [homeLoanRatePercent, setHomeLoanRatePercent] = useState(DEFAULT_HOME_LOAN_RATE_PERCENT);
   const [homeLoanTenureYears, setHomeLoanTenureYears] = useState(DEFAULT_HOME_LOAN_TENURE_YEARS);
   const [downPaymentPercent, setDownPaymentPercent] = useState(DEFAULT_DOWN_PAYMENT_PERCENT);
   const [propertyAppreciationPercent, setPropertyAppreciationPercent] = useState(DEFAULT_PROPERTY_APPRECIATION_PERCENT);
   const [reinvestmentRatePercent, setReinvestmentRatePercent] = useState(DEFAULT_REINVESTMENT_RATE_PERCENT);
   const [rentalYieldPercent, setRentalYieldPercent] = useState(DEFAULT_RENTAL_YIELD_PERCENT);
-  const [maintenancePercentOfBudget, setMaintenancePercentOfBudget] = useState(DEFAULT_MAINTENANCE_PERCENT_OF_BUDGET);
-  const [propertyTaxPercentOfAnnualBudget, setPropertyTaxPercentOfAnnualBudget] = useState(DEFAULT_PROPERTY_TAX_PERCENT_OF_ANNUAL_BUDGET);
+  const [maintenancePercentOfPrice, setMaintenancePercentOfPrice] = useState(DEFAULT_MAINTENANCE_PERCENT_OF_PRICE);
+  const [propertyTaxPercentOfPrice, setPropertyTaxPercentOfPrice] = useState(DEFAULT_PROPERTY_TAX_PERCENT_OF_PRICE);
   const [securityDepositMonths, setSecurityDepositMonths] = useState(DEFAULT_SECURITY_DEPOSIT_MONTHS);
   const [householdRegime, setHouseholdRegime] = useState<TaxRegime>(DEFAULT_HOUSEHOLD_REGIME);
   const [householdAge, setHouseholdAge] = useState<AgeBand>(DEFAULT_HOUSEHOLD_AGE);
-  // Phase 9.3: undefined = "still auto-computed"; a number = "user overrode it".
-  const [homePriceOverride, setHomePriceOverride] = useState<number | undefined>(undefined);
+  // Phase 9.3 (rent only, since Phase 9.6): undefined = "still auto-computed"; a number = "user overrode it".
   const [monthlyRentOverride, setMonthlyRentOverride] = useState<number | undefined>(undefined);
   const [submitted, setSubmitted] = useState(false);
 
-  // Live preview of the two auto-sized figures — the same formulas
-  // buildLayerOneComparison itself calls — so the "Base flat price" and
-  // "Assumed monthly rent" fields track the other levers even before the
-  // form's first submit, and snap back to tracking them the moment either
-  // override is reset.
-  const autoHomePrice = useMemo(() => {
-    try {
-      return Math.round(
-        estimateHomeSizingFromBudget({
-          monthlyHousingBudget: monthlyBudget,
-          homeLoanRatePercent,
-          homeLoanTenureYears,
-          downPaymentPercent,
-          maintenancePercentOfBudget,
-        }).propertyPrice,
-      );
-    } catch {
-      return 0;
-    }
-  }, [monthlyBudget, homeLoanRatePercent, homeLoanTenureYears, downPaymentPercent, maintenancePercentOfBudget]);
-  const displayedHomePrice = homePriceOverride ?? autoHomePrice;
-
+  // Live preview of the auto-sized rent — the same formula
+  // buildLayerOneComparison itself calls — so "Assumed monthly rent"
+  // tracks the flat price and yield even before the form's first submit,
+  // and snaps back to tracking them the moment the override is reset.
+  // (Phase 9.6: the flat price itself is no longer auto-sized — it's a
+  // plain required input now, so there's no equivalent preview for it.)
   const autoMonthlyRent = useMemo(
-    () => estimateMonthlyRentFromPrice(displayedHomePrice, rentalYieldPercent),
-    [displayedHomePrice, rentalYieldPercent],
+    () => estimateMonthlyRentFromPrice(homePrice, rentalYieldPercent),
+    [homePrice, rentalYieldPercent],
   );
   const displayedMonthlyRent = monthlyRentOverride ?? autoMonthlyRent;
 
@@ -325,9 +327,13 @@ export function RentVsBuy() {
     if (!submitted) return null;
     try {
       const value = buildLayerOneComparison({
+        // Phase 9.6: City is hard-coded — Hyderabad is still the only city
+        // @fincalc/data ships stamp-duty rates for (see the module doc
+        // comment); homePriceOverride is always supplied now, so the
+        // budget-derived sizing branch never runs on this page.
         city: 'hyderabad',
         monthlyHouseholdIncomeNet: monthlyIncome,
-        monthlyHousingBudget: monthlyBudget,
+        homePriceOverride: homePrice,
         horizonYears: 25,
         homeLoanRatePercent,
         homeLoanTenureYears,
@@ -335,12 +341,11 @@ export function RentVsBuy() {
         propertyAppreciationPercent,
         reinvestmentRatePercent,
         rentalYieldPercent,
-        maintenancePercentOfBudget,
-        propertyTaxPercentOfAnnualBudget,
+        maintenancePercentOfPrice,
+        propertyTaxPercentOfPrice,
         securityDepositMonths,
         householdRegime,
         householdAge,
-        ...(homePriceOverride !== undefined ? { homePriceOverride } : {}),
         ...(monthlyRentOverride !== undefined ? { monthlyRentOverride } : {}),
       });
       return { ok: true, value };
@@ -351,19 +356,18 @@ export function RentVsBuy() {
   }, [
     submitted,
     monthlyIncome,
-    monthlyBudget,
+    homePrice,
     homeLoanRatePercent,
     homeLoanTenureYears,
     downPaymentPercent,
     propertyAppreciationPercent,
     reinvestmentRatePercent,
     rentalYieldPercent,
-    maintenancePercentOfBudget,
-    propertyTaxPercentOfAnnualBudget,
+    maintenancePercentOfPrice,
+    propertyTaxPercentOfPrice,
     securityDepositMonths,
     householdRegime,
     householdAge,
-    homePriceOverride,
     monthlyRentOverride,
   ]);
 
@@ -387,10 +391,10 @@ export function RentVsBuy() {
 
   // Phase 9.5: the three headline monthly figures for the stat row above
   // the chart — see the module doc comment. Cheap, so computed directly
-  // like breakEven/crossoverYears above rather than memoized.
+  // like breakEven/crossoverYears above rather than memoized. Phase 9.6
+  // simplified the surplus formula to plain EMI minus rent.
   const monthlyEmi = layerOne ? emi(layerOne.buy.loanPrincipal, layerOne.buy.loanRatePercent / 100, layerOne.buy.tenureYears * 12) : 0;
-  const maintenancePerMonth = Math.round(monthlyBudget * (maintenancePercentOfBudget / 100));
-  const surplusIfRenting = layerOne ? monthlyEmi + maintenancePerMonth - layerOne.rent.assumedMonthlyRent : 0;
+  const surplusIfRenting = layerOne ? monthlyEmi - layerOne.rent.assumedMonthlyRent : 0;
 
   return (
     <CalcShell
@@ -406,16 +410,7 @@ export function RentVsBuy() {
             setSubmitted(true);
           }}
         >
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="text-ink">City</span>
-            <select className="rounded-sm border border-hairline bg-paper px-3 py-2 text-ink" defaultValue={SUPPORTED_CITIES[0].id} disabled>
-              {SUPPORTED_CITIES.map((c) => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
-            </select>
-          </label>
           <NumberField label="Household income, per month (take-home)" value={monthlyIncome} onChange={setMonthlyIncome} />
-          <NumberField label="Monthly housing budget" value={monthlyBudget} onChange={setMonthlyBudget} />
 
           <p className="text-xs text-ink-muted">
             Every assumption below is editable, grouped by what it affects, and sets your as-is baseline. Open a
@@ -424,13 +419,11 @@ export function RentVsBuy() {
           </p>
 
           <LeverGroup title="Home purchase & loan" defaultOpen>
-            <OverridableNumberField
+            <NumberField
               label="Base flat price (excl. stamp duty)"
-              hint="Auto-sized from your budget and loan terms unless you enter your own."
-              value={displayedHomePrice}
-              isOverridden={homePriceOverride !== undefined}
-              onChange={setHomePriceOverride}
-              onReset={() => setHomePriceOverride(undefined)}
+              hint="The purchase price you're comparing against — everything else in this section sizes the loan and the ongoing costs off it."
+              value={homePrice}
+              onChange={setHomePrice}
               step={1}
             />
             <NumberField label="Down payment (%)" value={downPaymentPercent} onChange={setDownPaymentPercent} min={5} max={90} step={1} />
@@ -461,14 +454,21 @@ export function RentVsBuy() {
           </LeverGroup>
 
           <LeverGroup title="Ongoing costs">
-            <NumberField label="Maintenance (% of budget)" value={maintenancePercentOfBudget} onChange={setMaintenancePercentOfBudget} min={0} max={10} step={0.5} />
             <NumberField
-              label="Property tax (% of annual budget)"
-              value={propertyTaxPercentOfAnnualBudget}
-              onChange={setPropertyTaxPercentOfAnnualBudget}
+              label="Maintenance (% of price, annual)"
+              value={maintenancePercentOfPrice}
+              onChange={setMaintenancePercentOfPrice}
               min={0}
-              max={5}
-              step={0.1}
+              max={3}
+              step={0.05}
+            />
+            <NumberField
+              label="Property tax (% of price, annual)"
+              value={propertyTaxPercentOfPrice}
+              onChange={setPropertyTaxPercentOfPrice}
+              min={0}
+              max={2}
+              step={0.05}
             />
           </LeverGroup>
 
@@ -537,7 +537,7 @@ export function RentVsBuy() {
             <div className="rounded-sm border border-hairline p-4">
               <p className="text-xs text-ink-muted">Surplus invested, if renting</p>
               <Amount value={surplusIfRenting} compact={false} className="font-serif-heading text-2xl text-rust" />
-              <p className="mt-1 text-xs text-ink-muted">EMI + maintenance, minus rent — swept into the shared investment each month.</p>
+              <p className="mt-1 text-xs text-ink-muted">EMI minus rent — swept into the shared investment each month.</p>
             </div>
           </div>
 
@@ -594,8 +594,7 @@ export function RentVsBuy() {
                 <li key={a.id}>{a.label}: <span className="font-mono tabular-nums text-ink">{(a.rate * 100).toFixed(1)}%</span></li>
               ))}
               <li>
-                Sized home: <Amount value={layerOne.buy.propertyPrice} className="text-ink" /> ({formatINR(layerOne.buy.loanPrincipal, { compact: true })} loan)
-                <span className="text-ink-muted">{homePriceOverride !== undefined ? ' — entered directly' : ' — auto-sized from your budget'}</span>
+                Home price: <Amount value={layerOne.buy.propertyPrice} className="text-ink" /> ({formatINR(layerOne.buy.loanPrincipal, { compact: true })} loan)
               </li>
               <li>
                 Home loan: <span className="font-mono tabular-nums text-ink">{layerOne.buy.loanRatePercent.toFixed(1)}%</span> for{' '}

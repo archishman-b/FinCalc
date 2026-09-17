@@ -39,7 +39,7 @@ export function SavedScenariosPanel({
               <p className="text-ink">{s.name}</p>
               <p className="text-xs text-ink-muted">
                 {formatINR(s.inputs.monthlyHouseholdIncomeNet, { compact: true })} income &middot;{' '}
-                {formatINR(s.inputs.monthlyHousingBudget, { compact: true })} housing &middot; {s.inputs.horizonYears}yr
+                {formatINR(s.inputs.monthlyHousingBudget ?? 0, { compact: true })} housing &middot; {s.inputs.horizonYears}yr
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-3">

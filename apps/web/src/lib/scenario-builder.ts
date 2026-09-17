@@ -64,6 +64,23 @@
  * canonical horizons still drive the results table, the hurdle-rate
  * solver, the flagship Comparator's own table, Monte Carlo and CSV
  * export, none of which asked for finer granularity.
+ *
+ * Phase 9.6 (user feedback, looking at the Phase 9.5 Rent vs Buy page:
+ * "lets simplify the workings. Remove the city, remove the Monthly
+ * housing budget. surplus now = emi - rent"): RentVsBuy.tsx now always
+ * supplies `homePriceOverride` directly (no more budget-derived
+ * auto-sizing on that page) and reads `monthlyHousingBudget` as
+ * optional. `buildLayerOneComparison` below grows a second, purely
+ * additive branch: when a direct home price is supplied, maintenance and
+ * property tax are computed as a percentage of *that price* instead of a
+ * percentage of the (now absent) budget, via the new
+ * `maintenancePercentOfPrice`/`propertyTaxPercentOfPrice` optional
+ * inputs and their `DEFAULT_..._PERCENT_OF_PRICE` constants. Nothing
+ * about the budget-derived branch changed — Comparator.tsx (the
+ * flagship Allocation Comparator) still supplies the brief §4 four
+ * inputs — city, income, *housing budget*, horizon — exactly as before,
+ * so this phase touches only how the Rent vs Buy tier-1 page drives this
+ * shared engine wrapper, not the wrapper's default behaviour.
  */
 import {
   getCostInflationIndexRules,
@@ -99,8 +116,8 @@ export interface LayerOneInputs {
   city: CityId;
   /** Monthly take-home (post-tax) household income, in rupees. */
   monthlyHouseholdIncomeNet: number;
-  /** Monthly budget for housing — the equal-outflow target both scenarios are compared on. */
-  monthlyHousingBudget: number;
+  /** Monthly budget for housing — the equal-outflow target both scenarios are compared on. Required unless `homePriceOverride` is supplied, in which case the entered price stands on its own and this is ignored (Phase 9.6). */
+  monthlyHousingBudget?: number;
   horizonYears: HorizonYears;
 
   // ---- Phase 9.2: every lever below is optional — omitted means "use the matching DEFAULT_* constant". ----
@@ -132,6 +149,12 @@ export interface LayerOneInputs {
   homePriceOverride?: number;
   /** Assumed monthly rent for an equivalent home in the Rent scenario. Overrides the yield-derived auto-sizing (see `estimateMonthlyRentFromPrice`) when supplied. */
   monthlyRentOverride?: number;
+
+  // ---- Phase 9.6: price-based cost levers, used only when `homePriceOverride` is supplied. ----
+  /** Society maintenance + upkeep, annualised, as a percentage of the home price. Only read when `homePriceOverride` is supplied; the budget-derived branch keeps using `maintenancePercentOfBudget`. */
+  maintenancePercentOfPrice?: number;
+  /** Municipal property tax, annualised, as a percentage of the home price. Only read when `homePriceOverride` is supplied; the budget-derived branch keeps using `propertyTaxPercentOfAnnualBudget`. */
+  propertyTaxPercentOfPrice?: number;
 }
 
 // ---- Documented default assumptions (brief principle 8: err conservative; principle 5: every one inspectable and, since Phase 9.2, directly editable) ----
@@ -154,6 +177,10 @@ export const DEFAULT_DOWN_PAYMENT_PERCENT = 20;
 export const DEFAULT_MAINTENANCE_PERCENT_OF_BUDGET = 2.0;
 /** Municipal property tax, annualised, as a fraction of the *annual* housing budget. */
 export const DEFAULT_PROPERTY_TAX_PERCENT_OF_ANNUAL_BUDGET = 1.0;
+/** Society maintenance + upkeep, annualised, as a fraction of the home price — the Phase 9.6 counterpart to `DEFAULT_MAINTENANCE_PERCENT_OF_BUDGET`, used when the home price is entered directly rather than budget-derived. */
+export const DEFAULT_MAINTENANCE_PERCENT_OF_PRICE = 0.2;
+/** Municipal property tax, annualised, as a fraction of the home price — the Phase 9.6 counterpart to `DEFAULT_PROPERTY_TAX_PERCENT_OF_ANNUAL_BUDGET`, used when the home price is entered directly rather than budget-derived. */
+export const DEFAULT_PROPERTY_TAX_PERCENT_OF_PRICE = 0.1;
 /** Assumed gross residential rental yield for a home equivalent to what the Buy scenario buys — a common Indian-metro ballpark, not a cited figure (see DEFAULT_HOME_LOAN_RATE_PERCENT's caveat). Sizes the Rent scenario's rent, not a tax/stamp-duty fact. */
 export const DEFAULT_RENTAL_YIELD_PERCENT = 3.0;
 export const DEFAULT_SECURITY_DEPOSIT_MONTHS = 3;
@@ -236,7 +263,9 @@ export interface LayerOneResult {
 
 export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult {
   if (inputs.monthlyHouseholdIncomeNet <= 0) throw new RangeError('Household income must be positive.');
-  if (inputs.monthlyHousingBudget <= 0) throw new RangeError('Housing budget must be positive.');
+  if (inputs.homePriceOverride === undefined && (inputs.monthlyHousingBudget === undefined || inputs.monthlyHousingBudget <= 0)) {
+    throw new RangeError('Housing budget must be positive when no home price is supplied.');
+  }
 
   const homeLoanRatePercent = inputs.homeLoanRatePercent ?? DEFAULT_HOME_LOAN_RATE_PERCENT;
   const homeLoanTenureYears = inputs.homeLoanTenureYears ?? DEFAULT_HOME_LOAN_TENURE_YEARS;
@@ -277,20 +306,31 @@ export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult 
   const hyderabadRates = stampDutyRules.states.TG?.byLocalBody.municipal_corporation;
   if (!hyderabadRates) throw new Error('buildLayerOneComparison: Telangana municipal_corporation stamp-duty rates are not shipped.');
 
-  // --- Size the Buy scenario: a direct price override (Phase 9.3) takes precedence over the budget-derived auto-sizing ---
+  // --- Size the Buy scenario: a direct price override (Phase 9.3) takes precedence over the budget-derived
+  // auto-sizing, and (Phase 9.6) also switches maintenance/property-tax onto a percentage of that price instead
+  // of a percentage of the (possibly absent) budget — see the module doc comment. ---
   let propertyPrice: number;
   let loanPrincipal: number;
+  let maintenancePerMonth: () => number;
+  let annualPropertyTax: number;
   if (inputs.homePriceOverride !== undefined) {
     propertyPrice = inputs.homePriceOverride;
     loanPrincipal = propertyPrice * loanToValue;
+    const maintenancePercentOfPrice = inputs.maintenancePercentOfPrice ?? DEFAULT_MAINTENANCE_PERCENT_OF_PRICE;
+    const propertyTaxPercentOfPrice = inputs.propertyTaxPercentOfPrice ?? DEFAULT_PROPERTY_TAX_PERCENT_OF_PRICE;
+    maintenancePerMonth = () => Math.round((propertyPrice * (maintenancePercentOfPrice / 100)) / 12);
+    annualPropertyTax = Math.round(propertyPrice * (propertyTaxPercentOfPrice / 100));
   } else {
+    const monthlyHousingBudget = inputs.monthlyHousingBudget!; // validated above: present and positive when no override
     ({ propertyPrice, loanPrincipal } = estimateHomeSizingFromBudget({
-      monthlyHousingBudget: inputs.monthlyHousingBudget,
+      monthlyHousingBudget,
       homeLoanRatePercent,
       homeLoanTenureYears,
       downPaymentPercent,
       maintenancePercentOfBudget,
     }));
+    maintenancePerMonth = () => Math.round(monthlyHousingBudget * maintenanceShareOfBudget);
+    annualPropertyTax = Math.round(monthlyHousingBudget * 12 * propertyTaxShareOfAnnualBudget);
   }
   const entryCosts = stampDutyAndRegistrationCost(propertyPrice, hyderabadRates);
 
@@ -303,8 +343,8 @@ export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult 
         entryCosts,
         loan: { principal: loanPrincipal, annualRate: () => homeLoanRate, tenureMonths: homeLoanTenureMonths },
         appreciationSeries: PROPERTY_APPRECIATION_SERIES,
-        maintenancePerMonth: () => Math.round(inputs.monthlyHousingBudget * maintenanceShareOfBudget),
-        annualPropertyTax: Math.round(inputs.monthlyHousingBudget * 12 * propertyTaxShareOfAnnualBudget),
+        maintenancePerMonth,
+        annualPropertyTax,
         liquidityTier: 2,
       }),
     ],
