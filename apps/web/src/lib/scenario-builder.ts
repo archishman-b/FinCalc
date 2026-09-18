@@ -81,6 +81,21 @@
  * inputs — city, income, *housing budget*, horizon — exactly as before,
  * so this phase touches only how the Rent vs Buy tier-1 page drives this
  * shared engine wrapper, not the wrapper's default behaviour.
+ *
+ * Phase 9.10 (user feedback: "add the annual rent increase field to the
+ * rent scenario box (& all subsequent calculation)"): the Rent scenario's
+ * rent was flat for the entire horizon until now — unrealistic next to
+ * the Buy scenario's own appreciation and cost-of-living levers. The new
+ * `annualRentIncreasePercent` input feeds `rentalExpensePosition`'s
+ * `monthlyRent` with the same annual step-function every other
+ * time-varying rate in this engine already uses (see
+ * `real-estate.ts`'s own rent input, and the EMI/SIP step-up
+ * calculators): `assumedMonthlyRent * (1 + rate) ^ floor((month-1)/12)`.
+ * Everything downstream — the equalised monthly target, the sweep, the
+ * results table, the trajectory chart, the hurdle-rate solver — already
+ * reads the rent scenario's real per-month cash flow rather than a
+ * cached flat figure, so escalating it here is the only change needed;
+ * no caller-side "and also recompute X" step was required.
  */
 import {
   getCostInflationIndexRules,
@@ -150,6 +165,10 @@ export interface LayerOneInputs {
   /** Assumed monthly rent for an equivalent home in the Rent scenario. Overrides the yield-derived auto-sizing (see `estimateMonthlyRentFromPrice`) when supplied. */
   monthlyRentOverride?: number;
 
+  // ---- Phase 9.10: rent isn't flat over a multi-year horizon. ----
+  /** Annual rent escalation, as a percentage — the Rent scenario's rent steps up by this rate every 12 months (same step-function convention as `real-estate.ts`'s own rent input and the EMI/SIP step-up calculators). */
+  annualRentIncreasePercent?: number;
+
   // ---- Phase 9.6: price-based cost levers, used only when `homePriceOverride` is supplied. ----
   /** Society maintenance + upkeep, annualised, as a percentage of the home price. Only read when `homePriceOverride` is supplied; the budget-derived branch keeps using `maintenancePercentOfBudget`. */
   maintenancePercentOfPrice?: number;
@@ -184,6 +203,8 @@ export const DEFAULT_PROPERTY_TAX_PERCENT_OF_PRICE = 0.1;
 /** Assumed gross residential rental yield for a home equivalent to what the Buy scenario buys — a common Indian-metro ballpark, not a cited figure (see DEFAULT_HOME_LOAN_RATE_PERCENT's caveat). Sizes the Rent scenario's rent, not a tax/stamp-duty fact. */
 export const DEFAULT_RENTAL_YIELD_PERCENT = 3.0;
 export const DEFAULT_SECURITY_DEPOSIT_MONTHS = 3;
+/** Typical Indian residential rent escalation — the same 5%/yr ballpark this project's own engine tests (canonical-failure-case.test.ts, founding-scenario.test.ts) already use as a realistic step-up. */
+export const DEFAULT_ANNUAL_RENT_INCREASE_PERCENT = 5.0;
 
 const HORIZONS_MONTHS = [60, 120, 180, 300] as const;
 
@@ -257,7 +278,13 @@ export interface LayerOneResult {
     downPaymentPercent: number;
   };
   /** The market rent assumed for an equivalent home in the Rent scenario. */
-  rent: { assumedMonthlyRent: number; securityDeposit: number; rentalYieldPercent: number; securityDepositMonths: number };
+  rent: {
+    assumedMonthlyRent: number;
+    securityDeposit: number;
+    rentalYieldPercent: number;
+    securityDepositMonths: number;
+    annualRentIncreasePercent: number;
+  };
   assumptions: readonly AssumptionSeries[];
 }
 
@@ -273,6 +300,7 @@ export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult 
   const propertyAppreciationPercent = inputs.propertyAppreciationPercent ?? DEFAULT_PROPERTY_APPRECIATION_PERCENT;
   const reinvestmentRatePercent = inputs.reinvestmentRatePercent ?? DEFAULT_REINVESTMENT_RATE_PERCENT;
   const rentalYieldPercent = inputs.rentalYieldPercent ?? DEFAULT_RENTAL_YIELD_PERCENT;
+  const annualRentIncreasePercent = inputs.annualRentIncreasePercent ?? DEFAULT_ANNUAL_RENT_INCREASE_PERCENT;
   const maintenancePercentOfBudget = inputs.maintenancePercentOfBudget ?? DEFAULT_MAINTENANCE_PERCENT_OF_BUDGET;
   const propertyTaxPercentOfAnnualBudget = inputs.propertyTaxPercentOfAnnualBudget ?? DEFAULT_PROPERTY_TAX_PERCENT_OF_ANNUAL_BUDGET;
   const securityDepositMonths = inputs.securityDepositMonths ?? DEFAULT_SECURITY_DEPOSIT_MONTHS;
@@ -357,11 +385,18 @@ export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult 
   // --- Rent an equivalent home; a direct rent override (Phase 9.3) takes precedence over the yield-derived auto-sizing ---
   const assumedMonthlyRent = inputs.monthlyRentOverride ?? estimateMonthlyRentFromPrice(propertyPrice, rentalYieldPercent);
   const securityDeposit = assumedMonthlyRent * securityDepositMonths;
+  const rentEscalationRate = annualRentIncreasePercent / 100;
 
   const rentScenario: Scenario = {
     id: 'rent',
     name: 'Rent & invest the difference',
-    positions: [rentalExpensePosition('rent:home', { monthlyRent: () => assumedMonthlyRent, securityDeposit })],
+    positions: [
+      rentalExpensePosition('rent:home', {
+        // Step up once every 12 months — same convention as real-estate.ts's own rent input.
+        monthlyRent: (month) => Math.round(assumedMonthlyRent * Math.pow(1 + rentEscalationRate, Math.floor((month - 1) / 12))),
+        securityDeposit,
+      }),
+    ],
     exitConfigs: [{ positionId: 'rent:home', capitalGainsTreatment: 'none' }],
     sweepGrowthSeries: SWEEP_SERIES,
     sweepExitConfig: { capitalGainsTreatment: 'equity' },
@@ -412,7 +447,7 @@ export function buildLayerOneComparison(inputs: LayerOneInputs): LayerOneResult 
       tenureYears: homeLoanTenureYears,
       downPaymentPercent,
     },
-    rent: { assumedMonthlyRent, securityDeposit, rentalYieldPercent, securityDepositMonths },
+    rent: { assumedMonthlyRent, securityDeposit, rentalYieldPercent, securityDepositMonths, annualRentIncreasePercent },
     assumptions,
   };
 }

@@ -10,6 +10,7 @@ import {
   buildLayerOneComparison,
   buildAnnualNetWorthTrajectory,
   estimateMonthlyRentFromPrice,
+  DEFAULT_ANNUAL_RENT_INCREASE_PERCENT,
   DEFAULT_DOWN_PAYMENT_PERCENT,
   DEFAULT_HOME_LOAN_RATE_PERCENT,
   DEFAULT_HOME_LOAN_TENURE_YEARS,
@@ -186,6 +187,29 @@ import {
  * disclosure widget (free, keyboard-accessible, and it expands inline
  * rather than needing viewport-edge collision handling on narrow mobile
  * screens, where hover tooltips don't work anyway).
+ *
+ * Phase 9.10 (immediate follow-up, three asks at once): (1) "remove this
+ * section, doesn't add value" — the "every assumption below is
+ * editable..." hint paragraph above the lever boxes is gone; the boxes'
+ * own titles and per-field hints already carry that weight. (2) "add the
+ * annual rent increase field to the rent scenario box (& all subsequent
+ * calculation)" — a new `annualRentIncreasePercent` lever, plumbed all
+ * the way into `scenario-builder.ts`'s `buildLayerOneComparison` (see
+ * its own module doc comment) so the escalation is real, not cosmetic:
+ * every downstream number — the results table, the trajectory chart,
+ * the hurdle-rate sentence — already reads the Rent scenario's actual
+ * per-month cash flow, so it picks this up for free. (3) "structure the
+ * rent scenario box nicely in a 2 column format with a divider, like the
+ * home buy & loan box, keep them identical" — the Rent scenario box now
+ * uses the exact same `sm:flex-row sm:divide-x sm:divide-hairline`
+ * two-column wrapper as "Home purchase & loan": the rent figure and its
+ * new escalation rate on the left (what you'd pay, and how fast it
+ * climbs), rental yield and security deposit on the right (the
+ * mechanics/lease terms). (4) "give the boxes a very subtle shade to
+ * differentiate from rest of the screen" — `LeverGroup` itself (shared
+ * by every box in this form) gained `bg-hairline/25`, reusing the
+ * existing hairline token at low opacity rather than a new hex value, so
+ * every lever box gets the same faint wash automatically.
  */
 interface BreakEven {
   crosses: boolean;
@@ -229,7 +253,7 @@ function computeCrossoverYears(trajectory: readonly AnnualNetWorthPoint[]): numb
 /** A collapsible group of levers (Phase 9.3) — see the module doc comment for why `<details>` over a state-driven accordion. Fields lay out two-per-row from `sm:` up, one-per-row below it, so a narrow phone never gets a cramped input. */
 function LeverGroup({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: ReactNode }) {
   return (
-    <details open={defaultOpen} className="rounded-sm border border-hairline">
+    <details open={defaultOpen} className="rounded-sm border border-hairline bg-hairline/25">
       <summary className="cursor-pointer select-none px-3 py-2.5 text-sm text-ink">{title}</summary>
       <div className="grid grid-cols-1 gap-x-3 gap-y-4 border-t border-hairline p-3 sm:grid-cols-2">{children}</div>
     </details>
@@ -351,6 +375,7 @@ export function RentVsBuy() {
   const [propertyAppreciationPercent, setPropertyAppreciationPercent] = useState(DEFAULT_PROPERTY_APPRECIATION_PERCENT);
   const [reinvestmentRatePercent, setReinvestmentRatePercent] = useState(DEFAULT_REINVESTMENT_RATE_PERCENT);
   const [rentalYieldPercent, setRentalYieldPercent] = useState(DEFAULT_RENTAL_YIELD_PERCENT);
+  const [annualRentIncreasePercent, setAnnualRentIncreasePercent] = useState(DEFAULT_ANNUAL_RENT_INCREASE_PERCENT);
   const [maintenancePercentOfPrice, setMaintenancePercentOfPrice] = useState(DEFAULT_MAINTENANCE_PERCENT_OF_PRICE);
   const [propertyTaxPercentOfPrice, setPropertyTaxPercentOfPrice] = useState(DEFAULT_PROPERTY_TAX_PERCENT_OF_PRICE);
   const [securityDepositMonths, setSecurityDepositMonths] = useState(DEFAULT_SECURITY_DEPOSIT_MONTHS);
@@ -395,6 +420,7 @@ export function RentVsBuy() {
         propertyAppreciationPercent,
         reinvestmentRatePercent,
         rentalYieldPercent,
+        annualRentIncreasePercent,
         maintenancePercentOfPrice,
         propertyTaxPercentOfPrice,
         securityDepositMonths,
@@ -417,6 +443,7 @@ export function RentVsBuy() {
     propertyAppreciationPercent,
     reinvestmentRatePercent,
     rentalYieldPercent,
+    annualRentIncreasePercent,
     maintenancePercentOfPrice,
     propertyTaxPercentOfPrice,
     securityDepositMonths,
@@ -466,12 +493,6 @@ export function RentVsBuy() {
         >
           <NumberField label="Household income, per month (take-home)" value={monthlyIncome} onChange={setMonthlyIncome} />
 
-          <p className="text-xs text-ink-muted">
-            Every assumption below is editable, grouped by what it affects, and sets your as-is baseline. Open a
-            section to see or change its levers. Property appreciation and reinvestment return — the two "what if"
-            dials for exploring the decision — moved above the chart once you compare.
-          </p>
-
           <LeverGroup title="Home purchase & loan" defaultOpen>
             <div className="flex flex-col gap-4 sm:col-span-2 sm:flex-row sm:divide-x sm:divide-hairline">
               <div className="flex flex-col gap-4 sm:w-1/2 sm:pr-4">
@@ -497,25 +518,40 @@ export function RentVsBuy() {
           </LeverGroup>
 
           <LeverGroup title="Rent scenario" defaultOpen>
-            <OverridableNumberField
-              label="Assumed monthly rent"
-              hint="Auto-sized from the flat price × rental yield unless you enter your own."
-              value={displayedMonthlyRent}
-              isOverridden={monthlyRentOverride !== undefined}
-              onChange={setMonthlyRentOverride}
-              onReset={() => setMonthlyRentOverride(undefined)}
-              step={1}
-            />
-            <NumberField
-              label="Rental yield (%)"
-              value={rentalYieldPercent}
-              onChange={setRentalYieldPercent}
-              min={0.5}
-              max={10}
-              step={0.1}
-              hint="Ignored once you enter a rent above."
-            />
-            <NumberField label="Security deposit (months' rent)" value={securityDepositMonths} onChange={setSecurityDepositMonths} min={0} max={12} step={1} />
+            <div className="flex flex-col gap-4 sm:col-span-2 sm:flex-row sm:divide-x sm:divide-hairline">
+              <div className="flex flex-col gap-4 sm:w-1/2 sm:pr-4">
+                <OverridableNumberField
+                  label="Assumed monthly rent"
+                  hint="Auto-sized from the flat price × rental yield unless you enter your own."
+                  value={displayedMonthlyRent}
+                  isOverridden={monthlyRentOverride !== undefined}
+                  onChange={setMonthlyRentOverride}
+                  onReset={() => setMonthlyRentOverride(undefined)}
+                  step={1}
+                />
+                <NumberField
+                  label="Annual rent increase (%)"
+                  hint="Rent steps up by this rate every 12 months — real rents rarely stay flat for a multi-year horizon."
+                  value={annualRentIncreasePercent}
+                  onChange={setAnnualRentIncreasePercent}
+                  min={0}
+                  max={15}
+                  step={0.5}
+                />
+              </div>
+              <div className="flex flex-col gap-4 sm:w-1/2 sm:pl-4">
+                <NumberField
+                  label="Rental yield (%)"
+                  value={rentalYieldPercent}
+                  onChange={setRentalYieldPercent}
+                  min={0.5}
+                  max={10}
+                  step={0.1}
+                  hint="Ignored once you enter a rent above."
+                />
+                <NumberField label="Security deposit (months' rent)" value={securityDepositMonths} onChange={setSecurityDepositMonths} min={0} max={12} step={1} />
+              </div>
+            </div>
           </LeverGroup>
 
           <LeverGroup title="Ongoing costs">
@@ -691,7 +727,8 @@ export function RentVsBuy() {
                 <span className="text-ink-muted">{monthlyRentOverride !== undefined ? ' — entered directly' : ' — auto-sized from flat price × yield'}</span>
               </li>
               <li>
-                Rental yield: <span className="font-mono tabular-nums text-ink">{layerOne.rent.rentalYieldPercent.toFixed(1)}%</span>, security deposit{' '}
+                Rental yield: <span className="font-mono tabular-nums text-ink">{layerOne.rent.rentalYieldPercent.toFixed(1)}%</span>, growing{' '}
+                <span className="font-mono tabular-nums text-ink">{layerOne.rent.annualRentIncreasePercent.toFixed(1)}%</span>/yr, security deposit{' '}
                 <span className="font-mono tabular-nums text-ink">{layerOne.rent.securityDepositMonths}</span> months
               </li>
               <li>
