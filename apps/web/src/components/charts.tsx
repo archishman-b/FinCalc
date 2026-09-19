@@ -205,6 +205,76 @@ export function GrowthChart({ data, ariaLabel }: { data: { year: number; investe
   );
 }
 
+/**
+ * The REIT Portfolio Builder's version of GrowthChart, with a third series
+ * overlaid: each year's own gross distributions (dividend/interest/rental/
+ * return-of-capital combined), as bars on a secondary right-hand axis —
+ * the "rent actually collected that year" number sitting alongside the
+ * cumulative invested-vs-value lines, the same dual-axis shape
+ * AmortizationChart uses for flow-vs-balance. Distributions are a flow
+ * (paid out, not retained in the portfolio's value), so they get their own
+ * axis rather than stacking into the cumulative value area — stacking them
+ * in would make the "value" line's scale misleading.
+ */
+export function GrowthWithIncomeChart({
+  data,
+  ariaLabel,
+}: {
+  data: { year: number; invested: number; value: number; distributions: number }[];
+  ariaLabel: string;
+}) {
+  const palette = usePalette();
+  return (
+    <div className="h-72 w-full" role="img" aria-label={ariaLabel}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={palette.hairline} vertical={false} />
+          <XAxis
+            dataKey="year"
+            tickFormatter={(v: number) => `Yr ${v}`}
+            tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
+            axisLine={{ stroke: palette.hairline }}
+            tickLine={false}
+          />
+          <YAxis
+            yAxisId="cumulative"
+            tickFormatter={(v: number) => formatINR(v, { compact: true, decimals: 0 })}
+            tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
+            axisLine={false}
+            tickLine={false}
+            width={64}
+          />
+          <YAxis
+            yAxisId="income"
+            orientation="right"
+            tickFormatter={(v: number) => formatINR(v, { compact: true, decimals: 0 })}
+            tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
+            axisLine={false}
+            tickLine={false}
+            width={64}
+          />
+          <Tooltip
+            formatter={(v, name) => [formatINR(Number(v), { compact: true }), name]}
+            labelFormatter={(v) => `Year ${v}`}
+            contentStyle={{
+              fontFamily: 'ui-monospace, monospace',
+              fontSize: 13,
+              background: palette.paper,
+              border: `1px solid ${palette.hairline}`,
+              borderRadius: 4,
+              color: palette.ink,
+            }}
+          />
+          <Legend wrapperStyle={{ ...LEGEND_STYLE, color: palette.ink }} />
+          <Bar isAnimationActive={false} yAxisId="income" dataKey="distributions" name="Distributions that year" fill={palette.moss} fillOpacity={0.55} radius={[2, 2, 0, 0]} />
+          <Area isAnimationActive={false} yAxisId="cumulative" type="monotone" dataKey="value" name="Portfolio value" stroke={palette.rust} fill={palette.rust} fillOpacity={0.15} strokeWidth={2} />
+          <Area isAnimationActive={false} yAxisId="cumulative" type="monotone" dataKey="invested" name="Invested" stroke={palette.ink} fill={palette.ink} fillOpacity={0.06} strokeWidth={1.5} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 /** A short list of labelled amounts as vertical bars — the capital-gains breakdown (gain / tax / net) and any other "a few numbers, side by side" comparison. Each bar takes its own color from `data`, defaulting to rust when not given, so a caller can highlight e.g. "tax" differently from "net proceeds" without a second series. */
 export function BreakdownBarChart({
   data,

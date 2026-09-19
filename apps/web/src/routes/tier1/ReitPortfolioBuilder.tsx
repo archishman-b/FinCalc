@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
 
+import { deflateToToday } from '@fincalc/engine';
+import { getReitInstruments, getReitInstrumentsAsOf } from '@fincalc/data';
+
 import {
   buildReitPortfolio,
   defaultAssumptions,
@@ -13,7 +16,7 @@ import {
 import { usePalette } from '../../lib/theme';
 import { Amount } from '../../components/Amount';
 import { CalcShell, Callout, NumberField, SubmitButton } from '../../components/CalcShell';
-import { BreakdownBarChart, GrowthChart } from '../../components/charts';
+import { BreakdownBarChart, GrowthWithIncomeChart } from '../../components/charts';
 
 /**
  * Tier-line module (added Sept 2026, alongside the home-page re-theme):
@@ -38,18 +41,34 @@ import { BreakdownBarChart, GrowthChart } from '../../components/charts';
  * The reference data (packages/data/src/reit-reference.ts) is explicit
  * that it's user-supplied and not yet cross-checked against exchange
  * filings — the Assumptions area below surfaces that rather than
- * presenting the defaults as verified fact.
+ * presenting the defaults as verified fact. The same data backs the
+ * collapsed "Historical REIT reference" panel in the form column: a
+ * quick, non-obstructive look at each REIT's current price/yield/CAGR/PE
+ * before the user commits to a weight split — tagged with its `asOf`
+ * date since it's a snapshot, not a live feed (wiring that up is future
+ * work, not attempted here).
+ *
+ * The monthly-income callout below is the module's other new surface:
+ * the brief's "equate dividend yields at a point of time as somewhat
+ * equivalent to rental yields" use case, made literal by averaging the
+ * final year's gross distributions into a single monthly rupee figure
+ * (ReitPortfolioResult.monthlyIncomeAtHorizonNominal) and then deflating
+ * both it and the headline final value to today's rupees with the same
+ * `deflateToToday` SipCalculator.tsx already uses — nominal and real
+ * side by side, never real alone.
  */
 
 const YEARS_DEFAULT = 10;
 const LUMPSUM_DEFAULT = 500_000;
 const MONTHLY_SIP_DEFAULT = 10_000;
+const INFLATION_DEFAULT_PCT = 6;
 
 export function ReitPortfolioBuilder() {
   const palette = usePalette();
   const [lumpsum, setLumpsum] = useState(LUMPSUM_DEFAULT);
   const [monthlySip, setMonthlySip] = useState(MONTHLY_SIP_DEFAULT);
   const [years, setYears] = useState(YEARS_DEFAULT);
+  const [inflationPct, setInflationPct] = useState(INFLATION_DEFAULT_PCT);
   const [weights, setWeights] = useState<Record<ReitId, number>>(equalWeights);
   const [assumptions, setAssumptions] = useState<Record<ReitId, ReitAssumption>>(defaultAssumptions);
   const [submitted, setSubmitted] = useState(false);
@@ -57,16 +76,32 @@ export function ReitPortfolioBuilder() {
 
   const weightTotal = sumWeights(weights);
   const weightsOk = weightsAreValid(weights);
+  const months = Math.round(years * 12);
 
   const result = useMemo(() => {
     if (!submitted || !weightsAreValid(weights)) return null;
-    return buildReitPortfolio({ lumpsum, monthlySip, months: Math.round(years * 12), weights, assumptions });
-  }, [submitted, lumpsum, monthlySip, years, weights, assumptions]);
+    return buildReitPortfolio({ lumpsum, monthlySip, months, weights, assumptions });
+  }, [submitted, lumpsum, monthlySip, months, weights, assumptions]);
 
   const totalTaxableOtherSources = useMemo(() => {
     if (!result) return 0;
     return Math.round(result.rows.reduce((s, r) => s + (r.taxable.other_sources ?? 0), 0) * 100) / 100;
   }, [result]);
+
+  // Real (today's-rupees) equivalents of the two headline nominal figures —
+  // the final portfolio value, and the monthly-income-at-horizon figure the
+  // "rental yield equivalent" callout below is built around.
+  const realFinalValue = useMemo(() => {
+    if (!result) return 0;
+    return deflateToToday(result.finalValue, inflationPct / 100, months);
+  }, [result, inflationPct, months]);
+  const monthlyIncomeAtHorizonReal = useMemo(() => {
+    if (!result) return 0;
+    return deflateToToday(result.monthlyIncomeAtHorizonNominal, inflationPct / 100, months);
+  }, [result, inflationPct, months]);
+
+  const historicalInstruments = getReitInstruments();
+  const historicalAsOf = getReitInstrumentsAsOf();
 
   return (
     <CalcShell
@@ -90,6 +125,58 @@ export function ReitPortfolioBuilder() {
           <NumberField label="Lumpsum, one-time" value={lumpsum} onChange={setLumpsum} step={50_000} min={0} required={false} />
           <NumberField label="Monthly SIP" value={monthlySip} onChange={setMonthlySip} step={1_000} min={0} required={false} />
           <NumberField label="Years" value={years} onChange={setYears} step={1} min={1} max={30} />
+          <NumberField
+            label="Inflation, annual (%, for the real-value figures)"
+            value={inflationPct}
+            onChange={setInflationPct}
+            step={0.5}
+            min={0}
+            max={20}
+            required={false}
+          />
+
+          <details className="rounded-sm border border-hairline px-3 py-2.5">
+            <summary className="cursor-pointer text-sm text-ink">Historical REIT reference — as on {historicalAsOf}</summary>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-ink-muted">
+                    <th className="pb-1.5 pr-3 font-normal">REIT</th>
+                    <th className="pb-1.5 pr-3 font-normal">Price</th>
+                    <th className="pb-1.5 pr-3 font-normal">Yield range</th>
+                    <th className="pb-1.5 pr-3 font-normal">3Y CAGR</th>
+                    <th className="pb-1.5 font-normal">P/E (TTM)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {REIT_DISPLAY.map((r) => {
+                    const instrument = historicalInstruments.find((i) => i.id === r.id);
+                    if (!instrument) return null;
+                    const cagr = instrument.priceCagr3y ?? instrument.priceCagr1y ?? instrument.priceCagr5y;
+                    return (
+                      <tr key={r.id} className="border-t border-hairline">
+                        <td className="py-1.5 pr-3 text-ink">
+                          <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: palette[r.colorKey] }} />
+                          {r.shortLabel}
+                        </td>
+                        <td className="py-1.5 pr-3 font-mono tabular-nums text-ink">
+                          <Amount value={instrument.marketPriceInr} compact={false} />
+                        </td>
+                        <td className="py-1.5 pr-3 font-mono tabular-nums text-ink">
+                          {(instrument.distributionYieldRangeMinPct * 100).toFixed(1)}–{(instrument.distributionYieldRangeMaxPct * 100).toFixed(1)}%
+                        </td>
+                        <td className="py-1.5 pr-3 font-mono tabular-nums text-ink">{cagr !== null ? `${(cagr * 100).toFixed(1)}%` : '—'}</td>
+                        <td className="py-1.5 font-mono tabular-nums text-ink">{instrument.peRatioTtm.toFixed(1)}×</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="mt-2 text-xs text-ink-muted">
+                A point-in-time snapshot supplied directly, not yet cross-checked against exchange filings — the same figures the assumptions below default from. Wiring this to a live feed is planned, not built yet.
+              </p>
+            </div>
+          </details>
 
           <fieldset className="flex flex-col gap-3">
             <legend className="mb-1 flex w-full items-baseline justify-between gap-2 text-sm text-ink">
@@ -185,7 +272,17 @@ export function ReitPortfolioBuilder() {
           <div>
             <p className="text-sm text-ink-muted">Portfolio value at the end of year {years}</p>
             <Amount value={result.finalValue} compact={false} className="font-serif-heading text-4xl text-rust" />
+            <p className="mt-1 text-sm text-ink-muted">
+              ≈ <Amount value={realFinalValue} compact={false} className="text-ink-muted" /> in today&rsquo;s rupees, at {inflationPct}% assumed inflation
+            </p>
           </div>
+
+          <Callout tone="positive">
+            At year {years}, this portfolio is distributing about{' '}
+            <Amount value={result.monthlyIncomeAtHorizonNominal} compact={false} className="font-medium text-ink" /> a month — the rental-yield
+            equivalent this tool is built to surface, the same way a rent cheque would read. In today&rsquo;s rupees, that&rsquo;s about{' '}
+            <Amount value={monthlyIncomeAtHorizonReal} compact={false} className="font-medium text-ink" /> a month.
+          </Callout>
 
           <dl className="grid max-w-md grid-cols-2 gap-y-4 text-sm">
             <dt className="text-ink-muted">Total invested</dt>
@@ -223,8 +320,11 @@ export function ReitPortfolioBuilder() {
           </div>
 
           <div>
-            <p className="mb-3 text-sm text-ink">Invested vs. portfolio value over time</p>
-            <GrowthChart data={[...result.yearlyRows]} ariaLabel="Cumulative amount invested versus the blended REIT portfolio's value, year by year" />
+            <p className="mb-3 text-sm text-ink">Invested vs. portfolio value over time, with annual distributions</p>
+            <GrowthWithIncomeChart
+              data={[...result.yearlyRows]}
+              ariaLabel="Cumulative amount invested versus the blended REIT portfolio's value, year by year, with that year's own gross distributions as bars on a secondary axis"
+            />
           </div>
 
           <div>

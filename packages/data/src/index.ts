@@ -122,6 +122,11 @@ export function getReitInstrument(id: string): ReitInstrument {
   return instrument;
 }
 
+/** The date this reference snapshot (price, CAGR, yield range, etc.) was recorded as-of — for surfacing "as on {date}" next to any dashboard use of getReitInstruments(), so the figures are never presented as live. */
+export function getReitInstrumentsAsOf(): string {
+  return parsedReitInstruments.asOf;
+}
+
 /** The full quarterly distribution-history table across all 5 REITs (93 records, 2019-08-14 to 2026-08-28) — see reit-reference.ts's ReitDistributionRecord for the shape and computeHistoricalComponentSplit for deriving a default four-component split from it. */
 export function getReitDistributionHistory(): readonly ReitDistributionRecord[] {
   return parsedReitDistributionHistory.records;

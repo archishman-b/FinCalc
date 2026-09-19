@@ -171,12 +171,14 @@ export interface ReitPortfolioResult {
   legs: readonly ReitPortfolioLeg[];
   /** One row per month, summed across all 5 legs. */
   rows: readonly MonthlyRow[];
-  /** Cumulative invested vs. blended portfolio value, one point per year — the same shape SipCalculator's GrowthChart consumes. */
-  yearlyRows: readonly { year: number; invested: number; value: number }[];
+  /** Cumulative invested vs. blended portfolio value, one point per year, plus that year's own gross distributions — feeds GrowthWithIncomeChart's dual-axis view (cumulative lines against annual distribution bars). */
+  yearlyRows: readonly { year: number; invested: number; value: number; distributions: number }[];
   totalInvested: number;
   finalValue: number;
   /** Sum of every month's gross distribution across the whole horizon, all 5 legs. */
   totalGrossDistributions: number;
+  /** The final year's gross distributions averaged to a monthly figure — the direct rental-yield-equivalent number: "what this portfolio would be paying out per month" at the selected horizon, in nominal (that year's) rupees. */
+  monthlyIncomeAtHorizonNominal: number;
   /** The four-component split of totalGrossDistributions, blended across all 5 legs by how much each actually paid out (not by starting weight) — the true realised mix, not the target allocation. */
   blendedComponentTotals: { interest: number; dividend: number; rental: number; returnOfCapital: number };
 }
@@ -261,17 +263,21 @@ export function buildReitPortfolio(input: ReitPortfolioInput): ReitPortfolioResu
     });
   }
 
-  const yearlyRows: { year: number; invested: number; value: number }[] = [];
+  const yearlyRows: { year: number; invested: number; value: number; distributions: number }[] = [];
   let cumulativeInvested = 0;
   for (let i = 0; i < rows.length; i += 12) {
     const chunk = rows.slice(i, i + 12);
     cumulativeInvested = round2(cumulativeInvested + chunk.reduce((s, r) => s + r.cashOut, 0));
-    yearlyRows.push({ year: Math.floor(i / 12) + 1, invested: cumulativeInvested, value: chunk[chunk.length - 1]!.assetValue });
+    const yearDistributions = round2(chunk.reduce((s, r) => s + r.cashIn, 0));
+    yearlyRows.push({ year: Math.floor(i / 12) + 1, invested: cumulativeInvested, value: chunk[chunk.length - 1]!.assetValue, distributions: yearDistributions });
   }
 
   const totalInvested = round2(rows.reduce((s, r) => s + r.cashOut, 0));
   const finalValue = rows[rows.length - 1]?.assetValue ?? 0;
   const totalGrossDistributions = round2(rows.reduce((s, r) => s + r.cashIn, 0));
+  // Average of the final 12 months' gross distributions — the "monthly rent-equivalent" figure at the selected horizon, in that final year's nominal rupees.
+  const finalYearRows = rows.slice(-12);
+  const monthlyIncomeAtHorizonNominal = finalYearRows.length > 0 ? round2(finalYearRows.reduce((s, r) => s + r.cashIn, 0) / finalYearRows.length) : 0;
 
   const blendedComponentTotals = { interest: 0, dividend: 0, rental: 0, returnOfCapital: 0 };
   for (const { dist } of legDistributions) {
@@ -283,5 +289,5 @@ export function buildReitPortfolio(input: ReitPortfolioInput): ReitPortfolioResu
     }
   }
 
-  return { legs, rows, yearlyRows, totalInvested, finalValue, totalGrossDistributions, blendedComponentTotals };
+  return { legs, rows, yearlyRows, totalInvested, finalValue, totalGrossDistributions, monthlyIncomeAtHorizonNominal, blendedComponentTotals };
 }
