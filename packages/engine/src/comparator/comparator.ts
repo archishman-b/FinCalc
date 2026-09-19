@@ -169,6 +169,21 @@ export function projectScenarioGivenTarget(
   });
   const sweepRows = sweep.project(maxHorizon, ctx);
 
+  // Phase 9.12: two more projections of the *same* sweep, splitting its
+  // contribution schedule into "month 1" and "every later month" so a UI
+  // can show what each part grew into. compoundContributions is linear in
+  // the contribution stream, so these always sum back to sweepRows exactly.
+  const sweepFirstMonthOnly = sipPosition(`${scenario.id}:sweep-first-month`, {
+    monthlyContribution: (month: Month) => (month === 1 ? (sweepContribution[0] ?? 0) : 0),
+    growthSeries: scenario.sweepGrowthSeries,
+  });
+  const sweepLaterMonthsOnly = sipPosition(`${scenario.id}:sweep-later-months`, {
+    monthlyContribution: (month: Month) => (month === 1 ? 0 : (sweepContribution[month - 1] ?? 0)),
+    growthSeries: scenario.sweepGrowthSeries,
+  });
+  const sweepFirstMonthRows = sweepFirstMonthOnly.project(maxHorizon, ctx);
+  const sweepLaterMonthsRows = sweepLaterMonthsOnly.project(maxHorizon, ctx);
+
   const exitConfigByPositionId = new Map((scenario.exitConfigs ?? []).map((c) => [c.positionId, c]));
   const sweepExitConfig = { positionId: sweep.id, ...(scenario.sweepExitConfig ?? { capitalGainsTreatment: 'equity' as const }) };
 
@@ -190,13 +205,19 @@ export function projectScenarioGivenTarget(
 
     let ownPositionsValueAfterTax = 0;
     let ownExitTax = 0;
+    let ownAssetValue = 0;
+    let ownLiabilityBalance = 0;
     for (const position of scenario.positions) {
       const rows = own.positionRows.get(position.id) ?? [];
       const config = resolveExitConfigWithReitCostBasis(position, exitConfigByPositionId.get(position.id), ctx, horizonMonths);
       const result = computeExitResult(position, rows, config, exitCtx);
       ownPositionsValueAfterTax = round2(ownPositionsValueAfterTax + result.netProceedsAfterTax);
       ownExitTax = round2(ownExitTax + result.capitalGainsTax);
+      const row = rows[horizonMonths - 1];
+      ownAssetValue = round2(ownAssetValue + (row?.assetValue ?? 0));
+      ownLiabilityBalance = round2(ownLiabilityBalance + (row?.liabilityBalance ?? 0));
     }
+    const ownExitTaxAndCosts = round2(ownAssetValue - ownLiabilityBalance - ownPositionsValueAfterTax);
 
     const sweepExitResult = computeExitResult(
       { id: sweep.id, kind: sweep.kind, project: sweep.project } as Position,
@@ -205,6 +226,9 @@ export function projectScenarioGivenTarget(
       exitCtx,
     );
     const sweepValueAfterTax = sweepExitResult.netProceedsAfterTax;
+    const sweepFirstMonthValue = sweepFirstMonthRows[horizonMonths - 1]?.assetValue ?? 0;
+    const sweepLaterMonthsValue = sweepLaterMonthsRows[horizonMonths - 1]?.assetValue ?? 0;
+    const sweepExitTaxAndCosts = round2(sweepFirstMonthValue + sweepLaterMonthsValue - sweepValueAfterTax);
 
     let capitalDeployedIntoOwnPositions = 0;
     for (let m = 0; m < horizonMonths; m++) capitalDeployedIntoOwnPositions += Math.max(0, own.ownNetWithTax[m] ?? 0);
@@ -245,6 +269,12 @@ export function projectScenarioGivenTarget(
       xirrOwnPositions,
       xirrTotal,
       totalTaxPaidCumulative: round2(annualTaxWithinHorizon + ownExitTax + sweepExitResult.capitalGainsTax),
+      ownBreakdown: { assetValue: ownAssetValue, liabilityBalance: ownLiabilityBalance, exitTaxAndCosts: ownExitTaxAndCosts },
+      sweepBreakdown: {
+        firstMonthValue: round2(sweepFirstMonthValue),
+        laterMonthsValue: round2(sweepLaterMonthsValue),
+        exitTaxAndCosts: sweepExitTaxAndCosts,
+      },
     };
   });
 

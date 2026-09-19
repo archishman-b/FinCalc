@@ -643,46 +643,46 @@ export function RentVsBuy() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <div className="text-sm text-ink">
+            <p className="text-sm text-ink">
               Net worth by year — what each path leaves you with after tax and exit costs, assuming every month's
-              surplus is reinvested. Dashed lines mark the years the lead changes.{' '}
-              <details className="inline-block">
-                <summary
-                  aria-label="How this is calculated"
-                  className="inline-flex h-4 w-4 translate-y-[3px] cursor-pointer select-none list-none items-center justify-center rounded-full border border-hairline text-[10px] leading-none text-ink-muted hover:border-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden"
-                >
-                  i
-                </summary>
-                <div className="mt-2 flex max-w-md flex-col gap-2">
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
-                    <span className="inline-flex items-center gap-1 font-medium text-rust">
-                      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-rust" />
-                      Buy
-                    </span>
-                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Home value</span>
-                    <span className="text-ink-muted">&minus;</span>
-                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Loan left</span>
-                    <span className="text-ink-muted">&minus;</span>
-                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Exit tax &amp; costs</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
-                    <span className="inline-flex items-center gap-1 font-medium text-moss">
-                      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-moss" />
-                      Rent
-                    </span>
-                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Down payment</span>
-                    <span className="text-ink-muted">+</span>
-                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">&Sigma; (EMI &minus; rent), invested</span>
-                    <span className="text-ink-muted">&minus;</span>
-                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Exit tax</span>
-                  </div>
-                  <p className="text-xs text-ink-muted">
-                    Rent leads early because that gap starts as one lump sum from month one, while Buy is still
-                    absorbing entry costs and a short-term sale would be taxed hardest.
-                  </p>
+              surplus is reinvested. Dashed lines mark the years the lead changes.
+            </p>
+            <details>
+              <summary
+                aria-label="How this is calculated"
+                className="inline-flex h-4 w-4 cursor-pointer select-none list-none items-center justify-center rounded-full border border-hairline text-[10px] leading-none text-ink-muted hover:border-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden"
+              >
+                i
+              </summary>
+              <div className="mt-2 flex max-w-md flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+                  <span className="inline-flex items-center gap-1 font-medium text-rust">
+                    <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-rust" />
+                    Buy
+                  </span>
+                  <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Home value</span>
+                  <span className="text-ink-muted">&minus;</span>
+                  <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Loan left</span>
+                  <span className="text-ink-muted">&minus;</span>
+                  <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Exit tax &amp; costs</span>
                 </div>
-              </details>
-            </div>
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+                  <span className="inline-flex items-center gap-1 font-medium text-moss">
+                    <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-moss" />
+                    Rent
+                  </span>
+                  <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Down payment</span>
+                  <span className="text-ink-muted">+</span>
+                  <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">&Sigma; (EMI &minus; rent), invested</span>
+                  <span className="text-ink-muted">&minus;</span>
+                  <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Exit tax</span>
+                </div>
+                <p className="text-xs text-ink-muted">
+                  Rent leads early because that gap starts as one lump sum from month one, while Buy is still
+                  absorbing entry costs and a short-term sale would be taxed hardest.
+                </p>
+              </div>
+            </details>
             <NetWorthTrajectoryChart
               data={trajectory.map((p) => ({
                 year: p.year,
@@ -702,22 +702,33 @@ export function RentVsBuy() {
             <table className="w-full min-w-[320px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-hairline text-left text-ink-muted">
-                  <th className="py-2 pr-3 font-normal">Horizon</th>
+                  <th className="py-2 pr-3 font-normal">Year</th>
                   <th className="py-2 pr-3 font-normal">Buy</th>
                   <th className="py-2 pr-3 font-normal">Rent &amp; invest</th>
                 </tr>
               </thead>
               <tbody>
-                {[5, 10, 15, 25].map((y, i) => {
-                  const [buyComparison, rentComparison] = layerOne.result.scenarios;
-                  return (
-                    <tr key={y} className="border-b border-hairline/60">
-                      <td className="py-2 pr-3 align-top text-ink-muted">{y}yr</td>
-                      <td className="py-2 pr-3 align-top"><Amount value={buyComparison!.perHorizon[i]!.terminalNetWorth} className="text-ink" /></td>
-                      <td className="py-2 pr-3 align-top"><Amount value={rentComparison!.perHorizon[i]!.terminalNetWorth} className="text-ink" /></td>
-                    </tr>
-                  );
-                })}
+                {trajectory.map((p) => (
+                  <tr key={p.year} className="border-b border-hairline/60">
+                    <td className="py-2 pr-3 align-top text-ink-muted">Yr {p.year}</td>
+                    <td className="py-2 pr-3 align-top">
+                      <Amount value={p.buyNetWorth} className="text-ink" />
+                      <div className="mt-0.5 text-[11px] leading-tight text-ink-muted">
+                        <Amount value={p.buyBreakdown.homeValue} className="text-ink-muted" /> home &minus;{' '}
+                        <Amount value={p.buyBreakdown.loanLeft} className="text-ink-muted" /> loan &minus;{' '}
+                        <Amount value={p.buyBreakdown.exitTaxAndCosts} className="text-ink-muted" /> tax
+                      </div>
+                    </td>
+                    <td className="py-2 pr-3 align-top">
+                      <Amount value={p.rentNetWorth} className="text-ink" />
+                      <div className="mt-0.5 text-[11px] leading-tight text-ink-muted">
+                        <Amount value={p.rentBreakdown.downPayment} className="text-ink-muted" /> down +{' '}
+                        <Amount value={p.rentBreakdown.invested} className="text-ink-muted" /> invested &minus;{' '}
+                        <Amount value={p.rentBreakdown.exitTax} className="text-ink-muted" /> tax
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

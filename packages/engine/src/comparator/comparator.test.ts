@@ -132,4 +132,49 @@ describe('compare — equalisation and sweep mechanics', () => {
     expect(b!.sweepContribution[6]).toBe(0); // B is the expensive one that month, nothing to sweep
     expect(a!.sweepContribution[6]).toBe(80_000); // A gets the full target swept since its own cost is 0
   });
+
+  it('Phase 9.12: ownBreakdown and sweepBreakdown always foot exactly to their parent totals', () => {
+    const ctx = constantMarketContext({ 'equity.index': 0.1 });
+    const scenarioA: Scenario = {
+      id: 'a',
+      name: 'Deploy 10L',
+      positions: [lumpsumPosition('a:lumpsum', { principal: 1_000_000, growthSeries: 'equity.index' })],
+      exitConfigs: [{ positionId: 'a:lumpsum', capitalGainsTreatment: 'equity' }],
+      sweepGrowthSeries: 'equity.index',
+      sweepExitConfig: { capitalGainsTreatment: 'equity' },
+    };
+    const scenarioB: Scenario = {
+      id: 'b',
+      name: 'Deploy 6L (tops up to 10L via sweep)',
+      positions: [lumpsumPosition('b:lumpsum', { principal: 600_000, growthSeries: 'equity.index' })],
+      exitConfigs: [{ positionId: 'b:lumpsum', capitalGainsTreatment: 'equity' }],
+      sweepGrowthSeries: 'equity.index',
+      sweepExitConfig: { capitalGainsTreatment: 'equity' },
+    };
+
+    const result = compare({
+      scenarios: [scenarioA, scenarioB],
+      ctx,
+      horizonsMonths: [12, 24],
+      startFy: '2026-27',
+      household: noBaselineHousehold,
+      cii,
+    });
+
+    for (const scenario of result.scenarios) {
+      for (const horizon of scenario.perHorizon) {
+        const { assetValue, liabilityBalance, exitTaxAndCosts } = horizon.ownBreakdown;
+        expect(assetValue - liabilityBalance - exitTaxAndCosts).toBeCloseTo(horizon.ownPositionsValueAfterTax, 6);
+
+        const { firstMonthValue, laterMonthsValue, exitTaxAndCosts: sweepExitTaxAndCosts } = horizon.sweepBreakdown;
+        expect(firstMonthValue + laterMonthsValue - sweepExitTaxAndCosts).toBeCloseTo(horizon.sweepValueAfterTax, 6);
+      }
+    }
+
+    // B gets a real month-1 sweep top-up in this fixture, so its first-month sweep value should be
+    // strictly positive and materially different from a scenario with no sweep at all (A).
+    const [a, b] = result.scenarios;
+    expect(b!.perHorizon[0]!.sweepBreakdown.firstMonthValue).toBeGreaterThan(0);
+    expect(a!.perHorizon[0]!.sweepBreakdown.firstMonthValue).toBe(0);
+  });
 });

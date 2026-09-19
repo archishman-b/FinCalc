@@ -146,6 +146,34 @@ export interface HorizonResult {
   xirrTotal: number | null;
   /** Income tax (annual, on accrual) plus exit capital-gains tax, summed over the horizon. */
   totalTaxPaidCumulative: number;
+  /**
+   * Phase 9.12: `ownPositionsValueAfterTax` broken into the three figures
+   * a UI showing "how this is calculated" needs — current market/asset
+   * value of this scenario's own dedicated positions (e.g. a home's
+   * appreciated price), the liability still outstanding against them
+   * (e.g. the remaining loan balance), and the combined exit costs +
+   * capital-gains tax of selling them today. `assetValue -
+   * liabilityBalance - exitTaxAndCosts === ownPositionsValueAfterTax`
+   * exactly (these are the same per-position numbers already summed to
+   * get that figure, just not previously broken out).
+   */
+  ownBreakdown: { assetValue: number; liabilityBalance: number; exitTaxAndCosts: number };
+  /**
+   * Same idea for `sweepValueAfterTax`, split by contribution timing
+   * rather than by position: the pre-tax value the very first month's
+   * sweep contribution has compounded to by this horizon (typically the
+   * "down payment"-sized catch-up in the month one scenario's own cost
+   * first exceeds another's), the pre-tax value every later month's
+   * contribution has compounded to, and the combined exit costs +
+   * capital-gains tax of selling the whole sweep today.
+   * `firstMonthValue + laterMonthsValue - exitTaxAndCosts ===
+   * sweepValueAfterTax` exactly — contribution compounding
+   * (compoundContributions in compounding.ts) is linear in the
+   * contribution stream, so splitting it into two complementary streams
+   * and summing their independently-compounded values reconstructs the
+   * combined sweep's value to the rupee, not an approximation.
+   */
+  sweepBreakdown: { firstMonthValue: number; laterMonthsValue: number; exitTaxAndCosts: number };
 }
 
 export interface ScenarioComparisonResult {

@@ -96,6 +96,19 @@
  * reads the rent scenario's real per-month cash flow rather than a
  * cached flat figure, so escalating it here is the only change needed;
  * no caller-side "and also recompute X" step was required.
+ *
+ * Phase 9.12 (user feedback: wanted the "i" disclosure's Buy/Rent
+ * formula chips backed by real numbers next to the results table, and
+ * that table switched from four snapshot horizons to one row per year):
+ * `buildAnnualNetWorthTrajectory` already ran `compare()` at every year
+ * for the chart; `AnnualNetWorthPoint` now also carries each year's
+ * `buyBreakdown`/`rentBreakdown`, read straight off the engine's new
+ * `HorizonResult.ownBreakdown`/`sweepBreakdown` (comparator.ts) — no new
+ * computation here, just plumbing figures the engine was already
+ * computing out to the one place in the UI already re-running `compare`
+ * year by year. RentVsBuy.tsx's results table now maps over the same
+ * `trajectory` array the chart uses, instead of a separate four-horizon
+ * loop over `layerOne.result.scenarios`.
  */
 import {
   getCostInflationIndexRules,
@@ -466,6 +479,17 @@ export interface AnnualNetWorthPoint {
   year: number;
   buyNetWorth: number;
   rentNetWorth: number;
+  /**
+   * Phase 9.12 (user feedback: "make sure that these 6 fields are
+   * provided... as the components that add up to the values" in the
+   * year-by-year results table): the same three figures the chart's own
+   * "how this is calculated" formula shows, renamed to match — see
+   * HorizonResult.ownBreakdown in the engine for the exact arithmetic
+   * (`homeValue - loanLeft - exitTaxAndCosts === buyNetWorth`).
+   */
+  buyBreakdown: { homeValue: number; loanLeft: number; exitTaxAndCosts: number };
+  /** Same idea, from HorizonResult.sweepBreakdown (`downPayment + invested - exitTax === rentNetWorth`). */
+  rentBreakdown: { downPayment: number; invested: number; exitTax: number };
 }
 
 export function buildAnnualNetWorthTrajectory(layerOne: LayerOneResult, maxYears?: number): AnnualNetWorthPoint[] {
@@ -480,11 +504,25 @@ export function buildAnnualNetWorthTrajectory(layerOne: LayerOneResult, maxYears
     cii: getCostInflationIndexRules(),
   });
   const [buy, rent] = result.scenarios;
-  return horizonsMonths.map((months, i) => ({
-    year: months / 12,
-    buyNetWorth: buy!.perHorizon[i]!.terminalNetWorth,
-    rentNetWorth: rent!.perHorizon[i]!.terminalNetWorth,
-  }));
+  return horizonsMonths.map((months, i) => {
+    const buyHorizon = buy!.perHorizon[i]!;
+    const rentHorizon = rent!.perHorizon[i]!;
+    return {
+      year: months / 12,
+      buyNetWorth: buyHorizon.terminalNetWorth,
+      rentNetWorth: rentHorizon.terminalNetWorth,
+      buyBreakdown: {
+        homeValue: buyHorizon.ownBreakdown.assetValue,
+        loanLeft: buyHorizon.ownBreakdown.liabilityBalance,
+        exitTaxAndCosts: buyHorizon.ownBreakdown.exitTaxAndCosts,
+      },
+      rentBreakdown: {
+        downPayment: rentHorizon.sweepBreakdown.firstMonthValue,
+        invested: rentHorizon.sweepBreakdown.laterMonthsValue,
+        exitTax: rentHorizon.sweepBreakdown.exitTaxAndCosts,
+      },
+    };
+  });
 }
 
 export interface HurdleSentence {
