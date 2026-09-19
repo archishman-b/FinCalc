@@ -3,6 +3,12 @@
  * properties don't reliably reach: SVG presentation attributes inside
  * Recharts. Kept in sync by hand with the `:root` values in index.css —
  * six short hex pairs, not worth a build-time generation step for.
+ *
+ * Re-themed alongside index.css's own re-theme (see that file's top
+ * comment for why): cool near-white/near-black ground, cobalt accent
+ * instead of terracotta rust. The `rust` field name is unchanged for the
+ * same reason index.css keeps `--rust` — renaming it would ripple into
+ * every chart call site that reads `palette.rust`.
  */
 import { useEffect, useState } from 'react';
 
@@ -17,23 +23,23 @@ export interface Palette {
 }
 
 export const LIGHT_PALETTE: Palette = {
-  paper: '#faf7f2',
-  ink: '#1c1a17',
-  inkMuted: '#6b6459',
-  rust: '#b5482e',
+  paper: '#fafbfc',
+  ink: '#101317',
+  inkMuted: '#667085',
+  rust: '#2451a3',
   moss: '#3f6b4f',
   ochre: '#a67425',
-  hairline: '#e4ddd1',
+  hairline: '#e2e5e9',
 };
 
 export const DARK_PALETTE: Palette = {
-  paper: '#17140f',
-  ink: '#f2ede4',
-  inkMuted: '#a89e8d',
-  rust: '#d6683f',
+  paper: '#0e1114',
+  ink: '#f1f3f5',
+  inkMuted: '#97a1b0',
+  rust: '#4a7fdb',
   moss: '#5c9271',
   ochre: '#d2a245',
-  hairline: '#332c22',
+  hairline: '#262b31',
 };
 
 /** Tracks `prefers-color-scheme` live, so a chart repaints if the OS theme changes without a reload. */

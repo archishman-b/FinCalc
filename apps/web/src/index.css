@@ -1,51 +1,67 @@
 @import "tailwindcss";
 
 /*
- * FinCalc design tokens — Phase 5 design plan (brief §5: "produce a short
- * design plan ... before writing UI code, and check it against this
- * brief").
+ * FinCalc design tokens — re-themed for a "finance terminal / banking app"
+ * feel (home-page redesign phase, Sept 2026), replacing the original
+ * Phase 5 warm-paper/serif design plan this file used to describe. The
+ * reaction to the paper-and-Georgia treatment, on both the old home page
+ * and a from-scratch "ebook vs terminal" mockup pass, was that it read as
+ * an ebook reader rather than an instrument — so the ground moved from a
+ * warm cream to a cool near-white, ink to a cooler near-black, and the
+ * accent from a terracotta rust to a confident cobalt blue: closer to a
+ * modern trading/banking app than a literal dark Bloomberg-style
+ * terminal, which was explicitly ruled out. Moss and ochre
+ * (positive/growth and warning/pending signals) are unchanged — they
+ * were never part of the "ebook" complaint and still read cleanly against
+ * a cool neutral ground.
  *
- * PALETTE — paper and ink, not fintech blue-slate. A warm off-white ground
- * and a warm near-black ink instead of the cold pure-white/slate-900 pairing
- * most finance sites use; one confident accent (rust) used only
- * functionally — primary actions, the hero number, the flagship door —
- * never as a decorative wash; moss for positive/growth signals; ochre for
- * the Parity Auditor's warnings. Six named hex values, each with a
- * dark-mode counterpart below.
+ * NAMING NOTE: the CSS variable and Tailwind color token below are still
+ * called `--rust` / `rust`, even though the color itself is now cobalt
+ * blue. Renaming it (e.g. to `--accent`) would touch every `text-rust` /
+ * `bg-rust` / `border-rust` / `outline-rust` usage across roughly a dozen
+ * files (RentVsBuy, Comparator, every Tier 1 calculator, CalcShell,
+ * Home) for a purely cosmetic fix — left as `rust` for now to keep this a
+ * one-file repaint. Worth a proper rename in its own pass if the mismatch
+ * starts to bother future work here.
  *
- * TYPE — three system-stack roles, zero external font requests. That's a
- * deliberate reading of brief principle 6 ("privacy by architecture"): a
- * font fetched from a type foundry's CDN is the one third-party request
- * most sites this size make without thinking about it, and this one
- * doesn't. A serif carries headlines and body copy for some warmth and
- * "well-made instrument" character instead of the sans-everywhere look of
- * most fintech/AI-generated sites; a tabular monospace carries the actual
- * rupee figures, since brief §5 says numbers are the hero.
+ * TYPE — the same three system-stack roles as before (still zero
+ * external font requests — brief principle 6, privacy by architecture).
+ * What changed: headings (`h1`/`h2`/`h3`) now default to the sans stack
+ * instead of the serif, since the serif headline was a large part of the
+ * "ebook" read. The explicit `.font-serif-heading` class — used across
+ * the Tier 1 calculators for hero result figures (EMI, SIP, Inflation,
+ * Capital Gains...) and headline sentences (RentVsBuy, Income Tax,
+ * Comparator) — is left as-is for now; that's a distinct, deliberate
+ * "numbers are the hero" treatment (brief §5) that wasn't part of what
+ * was reviewed in this redesign pass, so it's an intentionally separate
+ * decision rather than something dropped by accident.
  *
  * SELF-CHECK against brief §5's anti-generic list: no all-caps eyebrow
- * labels (none anywhere); no identical rounded cards (the entry router is
- * an asymmetric numbered list — see routes/Home.tsx, not a card grid); no
- * gradient washes (rust appears only on interactive/numeric elements).
+ * labels (a wordmark tag stating the tool count is the one small-caps
+ * use, not a label sitting over every heading); no identical rounded
+ * cards (the tool grid uses sharp corners and a distinct flagship
+ * treatment, not a uniform card wall); no gradient washes (cobalt appears
+ * only on interactive, numeric and flagship elements).
  */
 :root {
-  --paper: #faf7f2;
-  --ink: #1c1a17;
-  --ink-muted: #6b6459;
-  --rust: #b5482e;
+  --paper: #fafbfc;
+  --ink: #101317;
+  --ink-muted: #667085;
+  --rust: #2451a3;
   --moss: #3f6b4f;
   --ochre: #a67425;
-  --hairline: #e4ddd1;
+  --hairline: #e2e5e9;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #17140f;
-    --ink: #f2ede4;
-    --ink-muted: #a89e8d;
-    --rust: #d6683f;
+    --paper: #0e1114;
+    --ink: #f1f3f5;
+    --ink-muted: #97a1b0;
+    --rust: #4a7fdb;
     --moss: #5c9271;
     --ochre: #d2a245;
-    --hairline: #332c22;
+    --hairline: #262b31;
   }
 }
 
@@ -76,7 +92,7 @@
     color: var(--color-ink);
     font-family: var(--font-sans);
   }
-  h1, h2, h3, .font-serif-heading {
+  .font-serif-heading {
     font-family: var(--font-serif);
   }
   @media (prefers-reduced-motion: reduce) {
