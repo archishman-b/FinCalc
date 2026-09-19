@@ -602,7 +602,6 @@ export function RentVsBuy() {
               <div className="flex flex-col gap-4 sm:w-1/2 sm:pl-4">
                 <NumberField
                   label="Annual rent increase (%)"
-                  hint="Rent steps up by this rate every 12 months — real rents rarely stay flat for a multi-year horizon."
                   value={annualRentIncreasePercent}
                   onChange={setAnnualRentIncreasePercent}
                   min={0}
