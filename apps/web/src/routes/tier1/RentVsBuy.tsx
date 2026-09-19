@@ -653,12 +653,34 @@ export function RentVsBuy() {
                 >
                   i
                 </summary>
-                <p className="mt-2 max-w-md text-xs text-ink-muted">
-                  Buy: home value after appreciation, minus the remaining loan, minus tax and costs on a same-year
-                  sale. Rent: the down payment plus every month's EMI-vs-rent gap, invested and grown, minus tax on
-                  exit. Rent usually leads early because that gap starts as one lump sum invested from month one,
-                  while Buy is still absorbing entry costs and short-term capital-gains tax.
-                </p>
+                <div className="mt-2 flex max-w-md flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+                    <span className="inline-flex items-center gap-1 font-medium text-rust">
+                      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-rust" />
+                      Buy
+                    </span>
+                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Home value</span>
+                    <span className="text-ink-muted">&minus;</span>
+                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Loan left</span>
+                    <span className="text-ink-muted">&minus;</span>
+                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Exit tax &amp; costs</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+                    <span className="inline-flex items-center gap-1 font-medium text-moss">
+                      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-moss" />
+                      Rent
+                    </span>
+                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Down payment</span>
+                    <span className="text-ink-muted">+</span>
+                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">&Sigma; (EMI &minus; rent), invested</span>
+                    <span className="text-ink-muted">&minus;</span>
+                    <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Exit tax</span>
+                  </div>
+                  <p className="text-xs text-ink-muted">
+                    Rent leads early because that gap starts as one lump sum from month one, while Buy is still
+                    absorbing entry costs and a short-term sale would be taxed hardest.
+                  </p>
+                </div>
               </details>
             </div>
             <NetWorthTrajectoryChart
