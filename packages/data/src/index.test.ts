@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  computeHistoricalComponentSplit,
   getCapitalGainsRules,
   getCostInflationIndexRules,
   getFixedIncomeRules,
   getIncomeTaxRules,
+  getReitDistributionHistory,
   getReitDistributionRules,
+  getReitInstrument,
+  getReitInstruments,
   getRulePack,
   getStampDutyRules,
+  latestReitDistributionRecord,
   listRulePacks,
   lookupCII,
   parseRulePack,
+  REIT_IDS,
   stampDutyAndRegistrationCost,
 } from './index';
 
@@ -184,5 +190,95 @@ describe('@fincalc/data shipped packs (Phase 2: income-tax and capital-gains)', 
     expect(rules.products.potd_5y!.section80C).toBe(true);
     expect(rules.products.potd_1y!.section80C).toBe(false);
     expect(rules.products.potd_3y!.section80C).toBe(false);
+  });
+});
+
+describe('@fincalc/data REIT reference packs (reit-instruments, reit-distribution-history — user-supplied, not FY-scoped rule packs)', () => {
+  it('getReitInstruments ships exactly the 5 REITs in REIT_IDS order, each with a non-https user_supplied provenance rather than a fabricated source URL', () => {
+    const instruments = getReitInstruments();
+    expect(instruments.map((i) => i.id)).toEqual([...REIT_IDS]);
+  });
+
+  it('getReitInstrument resolves a single REIT and throws for an unknown id', () => {
+    expect(getReitInstrument('embassy').name).toBe('Embassy Office Parks REIT');
+    expect(getReitInstrument('nexus').assetClassFocus).toBe('Retail / Shopping Malls');
+    expect(() => getReitInstrument('not-a-reit')).toThrow(RangeError);
+  });
+
+  it('a null price-CAGR field always carries a note explaining why (too short a listing history, not a zero return)', () => {
+    const knowledgeRealty = getReitInstrument('knowledge-realty');
+    expect(knowledgeRealty.priceCagr1y).toBeNull();
+    expect(knowledgeRealty.priceCagr1yNote).toBeTruthy();
+    const embassy = getReitInstrument('embassy');
+    expect(embassy.priceCagr1y).not.toBeNull();
+  });
+
+  it('getReitDistributionHistory ships 93 quarterly records spanning 2019-08-14 to 2026-08-28, and every record was supplied for one of the 5 shipped REITs', () => {
+    const history = getReitDistributionHistory();
+    expect(history).toHaveLength(93);
+    const ids = new Set(history.map((r) => r.reitId));
+    expect([...ids].sort()).toEqual([...REIT_IDS].sort());
+    const dates = history.map((r) => r.date).sort();
+    expect(dates[0]).toBe('2019-08-14');
+    expect(dates[dates.length - 1]).toBe('2026-08-28');
+  });
+
+  it('every distribution record\'s four components sum to its totalDpuInr within a ₹0.01 rounding tolerance', () => {
+    for (const r of getReitDistributionHistory()) {
+      const sum = r.interestInr + r.dividendExemptInr + r.dividendTaxableInr + r.debtRepaymentCapReturnInr + r.otherIncomeInr;
+      expect(Math.abs(sum - r.totalDpuInr)).toBeLessThanOrEqual(0.01);
+    }
+  });
+
+  it('each REIT\'s earliest distribution record matches the listing-era context its instrument entry implies (Nexus and Knowledge Realty start later, consistent with their null older-window CAGRs)', () => {
+    const history = getReitDistributionHistory();
+    const firstDateFor = (id: string) => history.filter((r) => r.reitId === id).map((r) => r.date).sort()[0];
+    expect(firstDateFor('embassy')).toBe('2019-08-14');
+    expect(firstDateFor('mindspace')).toBe('2020-11-20');
+    expect(firstDateFor('brookfield')).toBe('2021-06-03');
+    expect(firstDateFor('nexus')).toBe('2023-08-28');
+    expect(firstDateFor('knowledge-realty')).toBe('2025-08-29');
+  });
+
+  it('computeHistoricalComponentSplit derives a four-component split (summing to 1) from the actual records, per REIT — never a hardcoded guess', () => {
+    const history = getReitDistributionHistory();
+    for (const id of REIT_IDS) {
+      const split = computeHistoricalComponentSplit(history, id);
+      const total = split.interest + split.dividend + split.rental + split.returnOfCapital;
+      expect(total).toBeCloseTo(1, 6);
+      expect(split.quartersObserved).toBeGreaterThan(0);
+      expect(split.interest).toBeGreaterThanOrEqual(0);
+      expect(split.dividend).toBeGreaterThanOrEqual(0);
+      expect(split.returnOfCapital).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('computeHistoricalComponentSplit: rental is 0 for every REIT — all 5 hold assets via SPVs, none distribute direct rental income in the supplied history', () => {
+    const history = getReitDistributionHistory();
+    for (const id of REIT_IDS) {
+      expect(computeHistoricalComponentSplit(history, id).rental).toBe(0);
+    }
+  });
+
+  it('computeHistoricalComponentSplit: Mindspace is almost entirely dividend-distributed, Brookfield has no dividend component at all — the two REITs sit at opposite ends of the mix, matching their very different effective-tax-rate notes', () => {
+    const history = getReitDistributionHistory();
+    const mindspace = computeHistoricalComponentSplit(history, 'mindspace');
+    const brookfield = computeHistoricalComponentSplit(history, 'brookfield');
+    expect(mindspace.dividend).toBeGreaterThan(0.7);
+    expect(brookfield.dividend).toBe(0);
+  });
+
+  it('computeHistoricalComponentSplit throws for a REIT id with no records, and trailingQuarters limits the window', () => {
+    const history = getReitDistributionHistory();
+    const allTime = computeHistoricalComponentSplit(history, 'embassy');
+    const trailing4 = computeHistoricalComponentSplit(history, 'embassy', 4);
+    expect(allTime.quartersObserved).toBe(29);
+    expect(trailing4.quartersObserved).toBe(4);
+  });
+
+  it('latestReitDistributionRecord returns the most recent record per REIT', () => {
+    const history = getReitDistributionHistory();
+    expect(latestReitDistributionRecord(history, 'embassy').date).toBe('2026-08-03');
+    expect(latestReitDistributionRecord(history, 'knowledge-realty').date).toBe('2026-08-28');
   });
 });

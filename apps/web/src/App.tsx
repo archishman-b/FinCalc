@@ -31,6 +31,9 @@ const CapitalGainsCalculator = lazy(() =>
 const InflationCalculator = lazy(() =>
   import('./routes/tier1/InflationCalculator').then((m) => ({ default: m.InflationCalculator })),
 );
+const ReitPortfolioBuilder = lazy(() =>
+  import('./routes/tier1/ReitPortfolioBuilder').then((m) => ({ default: m.ReitPortfolioBuilder })),
+);
 
 const LOADING = <div className="px-5 py-10 text-ink-muted sm:px-8">Loading…</div>;
 
@@ -95,6 +98,11 @@ export function App() {
       {route === 'calc-inflation' && (
         <Suspense fallback={LOADING}>
           <InflationCalculator />
+        </Suspense>
+      )}
+      {route === 'calc-reit-portfolio' && (
+        <Suspense fallback={LOADING}>
+          <ReitPortfolioBuilder />
         </Suspense>
       )}
       {(route === 'afford' || route === 'retirement') && <ComingSoon route={route} />}

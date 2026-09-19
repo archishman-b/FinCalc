@@ -8,10 +8,12 @@ import { navigate, type RouteId } from '../lib/router';
  * toolkit grid — the user's own framing was "this is a multi-tool kit,
  * focus on the tools, not the questions." The Allocation Comparator keeps
  * its flagship treatment (brief §3 calls it out as "the flagship"); the
- * other eight Tier 1 modules that are actually built are direct tiles,
- * each a real link like the old Tier 1 grid's rows, not a second funnel
- * page. Affordability and Retirement/FIRE are still `ComingSoon` stubs
- * (see App.tsx) and carry a "Soon" tag rather than pretending otherwise.
+ * other nine Tier 1 modules are direct tiles, each a real link like the
+ * old Tier 1 grid's rows, not a second funnel page. Affordability and
+ * Retirement/FIRE are still `ComingSoon` stubs (see App.tsx) and carry a
+ * "Soon" tag rather than pretending otherwise; the REIT Portfolio Builder
+ * (added Sept 2026) is live, on top of the engine's existing `reitPosition`
+ * — see lib/reit-portfolio.ts.
  *
  * Income tax and capital gains (routes `calc-income-tax` /
  * `calc-capital-gains`, both fully implemented in routes/tier1/) are
@@ -130,6 +132,17 @@ function IconSunset({ size = 18 }: IconProps) {
   );
 }
 
+function IconReitPortfolio({ size = 18 }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="13.5" width="7" height="6.5" rx="0.5" />
+      <rect x="11.5" y="9" width="7" height="11" rx="0.5" />
+      <path d="M6.5 13.5v-2.3l8-3.7 5 2.1" />
+      <circle cx="19.5" cy="9.6" r="1.1" />
+    </svg>
+  );
+}
+
 interface Tool {
   number: string;
   name: string;
@@ -146,8 +159,9 @@ const TOOLS: Tool[] = [
   { number: '04', name: 'SIP & Goal Planning', detail: 'Step-up, lumpsum, nominal vs real', route: 'calc-sip', icon: IconSip },
   { number: '05', name: 'Fixed Income', detail: "FD, RD, PPF, SSY, EPF, VPF, NSC & more", route: 'calc-fixed-income', icon: IconBank },
   { number: '06', name: 'Inflation & Real Return', detail: "What today's rupees will cost tomorrow", route: 'calc-inflation', icon: IconInflation },
-  { number: '07', name: 'Affordability & Stress Test', detail: 'What you can safely carry, and what breaks it', route: 'afford', icon: IconGauge, soon: true },
-  { number: '08', name: 'Retirement & FIRE', detail: 'Required corpus, gap analysis, lean/fat FIRE', route: 'retirement', icon: IconSunset, soon: true },
+  { number: '07', name: 'REIT Portfolio Builder', detail: 'SIP or lumpsum across a weighted REIT bucket, distributions & NAV growth', route: 'calc-reit-portfolio', icon: IconReitPortfolio },
+  { number: '08', name: 'Affordability & Stress Test', detail: 'What you can safely carry, and what breaks it', route: 'afford', icon: IconGauge, soon: true },
+  { number: '09', name: 'Retirement & FIRE', detail: 'Required corpus, gap analysis, lean/fat FIRE', route: 'retirement', icon: IconSunset, soon: true },
 ];
 
 export function Home() {
@@ -156,9 +170,9 @@ export function Home() {
       <div className="flex items-baseline justify-between gap-4 border-b border-hairline pb-4">
         <div className="flex items-baseline gap-3">
           <span className="text-lg font-bold uppercase tracking-wide text-ink">FinCalc</span>
-          <span className="text-sm text-ink-muted">Nine tools, one engine. Pick one to start.</span>
+          <span className="text-sm text-ink-muted">Ten tools, one engine. Pick one to start.</span>
         </div>
-        <span className="shrink-0 font-mono text-[11px] uppercase tracking-wider text-ink-muted">9 tools</span>
+        <span className="shrink-0 font-mono text-[11px] uppercase tracking-wider text-ink-muted">10 tools</span>
       </div>
 
       <button

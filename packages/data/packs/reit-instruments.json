@@ -1,0 +1,129 @@
+{
+  "id": "reit-instruments",
+  "asOf": "2026-09-19",
+  "jurisdiction": "IN",
+  "provenance": {
+    "sourceType": "user_supplied",
+    "source": "Figures supplied directly by the user in the FinCalc project conversation: current market price, 1/3/5-year price CAGR, distribution yield range, total portfolio area, revenue/EBITDA-NOI YoY growth, trailing P/E, and a qualitative effective-tax-rate-on-distributions note (for a 30%-slab holder) for each of the 5 major listed Indian REITs.",
+    "suppliedOn": "2026-09-19",
+    "note": "Not independently cross-checked against BSE/NSE disclosures, each trust's investor-relations filings, or SEBI's REIT register. Market price, CAGR and P/E are a point-in-time snapshot around the date above, not a live feed — refresh before relying on this for a real allocation decision. A null CAGR field means the user's own table reported it as not applicable (usually too short a listing history), not that the figure is zero."
+  },
+  "instruments": [
+    {
+      "id": "embassy",
+      "name": "Embassy Office Parks REIT",
+      "assetClassFocus": "Commercial / Office",
+      "marketPriceInr": 441.0,
+      "priceCagr1y": 0.065,
+      "priceCagr3y": 0.128,
+      "priceCagr5y": 0.059,
+      "distributionYieldRangeMinPct": 0.058,
+      "distributionYieldRangeMaxPct": 0.062,
+      "totalPortfolioAreaSqFt": 51100000,
+      "revenueYoyGrowthPct": 0.118,
+      "ebitdaYoyGrowthPct": 0.102,
+      "peRatioTtm": 110.0,
+      "effectiveTaxRateOnDistributions": {
+        "forSlabRatePct": 0.30,
+        "minPct": 0.15,
+        "maxPct": 0.22,
+        "note": "Taxable interest/dividend components roughly 50-70% of payouts"
+      }
+    },
+    {
+      "id": "mindspace",
+      "name": "Mindspace Business Parks REIT",
+      "assetClassFocus": "Commercial / Office",
+      "marketPriceInr": 506.0,
+      "priceCagr1y": 0.139,
+      "priceCagr3y": 0.130,
+      "priceCagr5y": null,
+      "priceCagr5yNote": "N/A — listed August 2020",
+      "distributionYieldRangeMinPct": 0.047,
+      "distributionYieldRangeMaxPct": 0.052,
+      "totalPortfolioAreaSqFt": 34800000,
+      "revenueYoyGrowthPct": 0.280,
+      "ebitdaYoyGrowthPct": 0.245,
+      "peRatioTtm": 42.9,
+      "effectiveTaxRateOnDistributions": {
+        "forSlabRatePct": 0.30,
+        "minPct": 0.03,
+        "maxPct": 0.08,
+        "note": "High share of tax-exempt dividends under Section 10(23FC) and capital repayments"
+      }
+    },
+    {
+      "id": "brookfield",
+      "name": "Brookfield India Real Estate Trust",
+      "assetClassFocus": "Commercial / Office",
+      "marketPriceInr": 338.5,
+      "priceCagr1y": 0.017,
+      "priceCagr3y": 0.051,
+      "priceCagr5y": null,
+      "priceCagr5yNote": "N/A — listed February 2021",
+      "distributionYieldRangeMinPct": 0.061,
+      "distributionYieldRangeMaxPct": 0.065,
+      "totalPortfolioAreaSqFt": 28900000,
+      "revenueYoyGrowthPct": 0.380,
+      "revenueYoyGrowthNote": "Post-acquisitions",
+      "ebitdaYoyGrowthPct": 0.310,
+      "peRatioTtm": 44.6,
+      "effectiveTaxRateOnDistributions": {
+        "forSlabRatePct": 0.30,
+        "minPct": 0.10,
+        "maxPct": 0.18,
+        "note": "Mix of interest, SPV dividends and debt repayment"
+      }
+    },
+    {
+      "id": "nexus",
+      "name": "Nexus Select Trust",
+      "assetClassFocus": "Retail / Shopping Malls",
+      "marketPriceInr": 167.3,
+      "priceCagr1y": 0.093,
+      "priceCagr3y": null,
+      "priceCagr3yNote": "N/A — listed 2023",
+      "priceCagr5y": null,
+      "priceCagr5yNote": "N/A — listed 2023",
+      "distributionYieldRangeMinPct": 0.056,
+      "distributionYieldRangeMaxPct": 0.060,
+      "totalPortfolioAreaSqFt": 10500000,
+      "revenueYoyGrowthPct": 0.125,
+      "ebitdaYoyGrowthPct": 0.140,
+      "peRatioTtm": 57.5,
+      "effectiveTaxRateOnDistributions": {
+        "forSlabRatePct": 0.30,
+        "minPct": 0.05,
+        "maxPct": 0.12,
+        "note": "Significant tax-exempt / low-tax structuring"
+      }
+    },
+    {
+      "id": "knowledge-realty",
+      "name": "Knowledge Realty Trust",
+      "assetClassFocus": "Commercial / Office",
+      "marketPriceInr": 113.8,
+      "priceCagr1y": null,
+      "priceCagr1yNote": "N/A — newly listed",
+      "priceCagr3y": null,
+      "priceCagr3yNote": "N/A — newly listed",
+      "priceCagr5y": null,
+      "priceCagr5yNote": "N/A — newly listed",
+      "distributionYieldRangeMinPct": 0.060,
+      "distributionYieldRangeMaxPct": 0.064,
+      "totalPortfolioAreaSqFt": 20000000,
+      "totalPortfolioAreaNote": "20.0+ million sq ft",
+      "revenueYoyGrowthPct": null,
+      "revenueYoyGrowthNote": "N/A — newly listed, no prior-year comparable",
+      "ebitdaYoyGrowthPct": null,
+      "ebitdaYoyGrowthNote": "N/A — newly listed, no prior-year comparable",
+      "peRatioTtm": 80.5,
+      "effectiveTaxRateOnDistributions": {
+        "forSlabRatePct": 0.30,
+        "minPct": 0.10,
+        "maxPct": 0.16,
+        "note": "Standard office-REIT pass-through mix"
+      }
+    }
+  ]
+}
