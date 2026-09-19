@@ -677,6 +677,18 @@ export function RentVsBuy() {
                   <span className="text-ink-muted">&minus;</span>
                   <span className="rounded-sm border border-hairline bg-hairline/25 px-1.5 py-0.5 text-ink">Exit tax</span>
                 </div>
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-l-2 border-hairline pl-3 text-[11px] text-ink-muted">
+                  <span className="font-medium text-ink-muted">&ldquo;Down payment&rdquo; =</span>
+                  <span className="rounded-sm border border-hairline/70 px-1 py-0.5 text-ink-muted">Down payment</span>
+                  <span>+</span>
+                  <span className="rounded-sm border border-hairline/70 px-1 py-0.5 text-ink-muted">Entry costs</span>
+                  <span>+</span>
+                  <span className="rounded-sm border border-hairline/70 px-1 py-0.5 text-ink-muted">First EMI</span>
+                  <span>&minus;</span>
+                  <span className="rounded-sm border border-hairline/70 px-1 py-0.5 text-ink-muted">First rent</span>
+                  <span>&minus;</span>
+                  <span className="rounded-sm border border-hairline/70 px-1 py-0.5 text-ink-muted">Deposit</span>
+                </div>
                 <p className="text-xs text-ink-muted">
                   Rent leads early because that gap starts as one lump sum from month one, while Buy is still
                   absorbing entry costs and a short-term sale would be taxed hardest.
