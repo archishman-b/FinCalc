@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
 import { formatINR } from '@fincalc/ui';
-import { emi, type AgeBand, type TaxRegime } from '@fincalc/engine';
+import { emi, principalForEmi, type AgeBand, type TaxRegime } from '@fincalc/engine';
 
 import { Amount } from '../../components/Amount';
 import { Callout, CalcShell, NumberField, SelectField, SubmitButton } from '../../components/CalcShell';
@@ -210,6 +210,29 @@ import {
  * by every box in this form) gained `bg-hairline/25`, reusing the
  * existing hairline token at low opacity rather than a new hex value, so
  * every lever box gets the same faint wash automatically.
+ *
+ * Phase 9.14 (two asks at once): (1) "move all the other 3 components
+ * next to Assumed monthly rent into the right part of the divider,
+ * similar to the case in the buy option" -- the Rent scenario box's
+ * two-column split (Phase 9.10) now mirrors "Home purchase & loan"'s
+ * structurally, not just visually: a single primary field alone on the
+ * left (Assumed monthly rent, matching Base flat price's left column),
+ * every other lever stacked on the right (annual rent increase, rental
+ * yield, security deposit -- three fields, same as Down payment/rate/
+ * tenure on the Buy side). (2) "put an auto calculate home affordability
+ * button next to the household income figure, along with an emi as % of
+ * income field -- set at 30% by default -- that sets the Base flat price
+ * in a way that matches the above criteria on monthly emi": a new
+ * emiToIncomePercent lever and an "Auto-calculate affordability" button
+ * now sit alongside Household income. The button runs the inverse of
+ * this component's own emi() call -- the engine's principalForEmi -- at
+ * the loan's current rate and tenure to find the loan principal
+ * supporting a target EMI of income times that percentage, then grosses
+ * it back up to a flat price via the current down-payment %, and writes
+ * it straight into Base flat price. Purely a one-shot write on click,
+ * not a live-tracking auto field like Assumed monthly rent -- there is
+ * no single "correct" affordable price to keep locked to as the user
+ * keeps editing other levers afterwards.
  */
 interface BreakEven {
   crosses: boolean;
@@ -217,6 +240,11 @@ interface BreakEven {
   buyNW: number;
   rentNW: number;
 }
+
+// Phase 9.14: local to this page -- unlike the other DEFAULT_* constants
+// (scenario-builder.ts), this one never reaches buildLayerOneComparison;
+// it only seeds the affordability button's one-shot calculation below.
+const DEFAULT_EMI_TO_INCOME_PERCENT = 30;
 
 const REGIME_OPTIONS: { value: TaxRegime; label: string }[] = [
   { value: 'new', label: 'New regime' },
@@ -368,6 +396,7 @@ function SliderLever({
 
 export function RentVsBuy() {
   const [monthlyIncome, setMonthlyIncome] = useState(450_000);
+  const [emiToIncomePercent, setEmiToIncomePercent] = useState(DEFAULT_EMI_TO_INCOME_PERCENT);
   const [homePrice, setHomePrice] = useState(22_000_000);
   const [homeLoanRatePercent, setHomeLoanRatePercent] = useState(DEFAULT_HOME_LOAN_RATE_PERCENT);
   const [homeLoanTenureYears, setHomeLoanTenureYears] = useState(DEFAULT_HOME_LOAN_TENURE_YEARS);
@@ -401,6 +430,22 @@ export function RentVsBuy() {
   // — previously only visible parenthetically in the bottom assumptions
   // panel ("(₹X loan)"). Cheap arithmetic, no memo needed.
   const loanAmount = homePrice * (1 - downPaymentPercent / 100);
+
+  // Phase 9.14: back-solves the flat price a target EMI (income times the
+  // ratio above) can support, using principalForEmi -- the exact inverse
+  // of the emi() call further down this component -- at the loan's
+  // current rate and tenure, then grosses that principal back up to a
+  // flat price via the current down-payment %. Rounded to the nearest
+  // Rs 1,000, since anything finer is meaningless at this scale. A
+  // one-shot write into homePrice on click, not memoized -- cheap
+  // arithmetic, same as loanAmount just above, and it should only run
+  // when the button is pressed, not on every render.
+  const applyAutoAffordability = () => {
+    const targetMonthlyEmi = monthlyIncome * (emiToIncomePercent / 100);
+    const principal = principalForEmi(targetMonthlyEmi, homeLoanRatePercent / 100, homeLoanTenureYears * 12);
+    const affordablePrice = principal / (1 - downPaymentPercent / 100);
+    setHomePrice(Math.round(affordablePrice / 1000) * 1000);
+  };
 
   const outcome = useMemo<{ ok: true; value: LayerOneResult } | { ok: false; error: string } | null>(() => {
     if (!submitted) return null;
@@ -491,7 +536,31 @@ export function RentVsBuy() {
             setSubmitted(true);
           }}
         >
-          <NumberField label="Household income, per month (take-home)" value={monthlyIncome} onChange={setMonthlyIncome} />
+          <div className="flex flex-col gap-3">
+            <NumberField label="Household income, per month (take-home)" value={monthlyIncome} onChange={setMonthlyIncome} />
+            <div className="flex items-end gap-2">
+              <div className="w-28">
+                <NumberField
+                  label="EMI, % of income"
+                  value={emiToIncomePercent}
+                  onChange={setEmiToIncomePercent}
+                  min={5}
+                  max={80}
+                  step={1}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span aria-hidden="true" className="invisible text-sm">Auto</span>
+                <button
+                  type="button"
+                  onClick={applyAutoAffordability}
+                  className="whitespace-nowrap rounded-sm border border-rust px-3 py-2 text-sm text-rust hover:bg-rust hover:text-paper focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rust"
+                >
+                  Auto-calculate affordability
+                </button>
+              </div>
+            </div>
+          </div>
 
           <LeverGroup title="Home purchase & loan" defaultOpen>
             <div className="flex flex-col gap-4 sm:col-span-2 sm:flex-row sm:divide-x sm:divide-hairline">
@@ -529,6 +598,8 @@ export function RentVsBuy() {
                   onReset={() => setMonthlyRentOverride(undefined)}
                   step={1}
                 />
+              </div>
+              <div className="flex flex-col gap-4 sm:w-1/2 sm:pl-4">
                 <NumberField
                   label="Annual rent increase (%)"
                   hint="Rent steps up by this rate every 12 months — real rents rarely stay flat for a multi-year horizon."
@@ -538,8 +609,6 @@ export function RentVsBuy() {
                   max={15}
                   step={0.5}
                 />
-              </div>
-              <div className="flex flex-col gap-4 sm:w-1/2 sm:pl-4">
                 <NumberField
                   label="Rental yield (%)"
                   value={rentalYieldPercent}
