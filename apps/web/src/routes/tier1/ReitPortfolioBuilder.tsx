@@ -63,6 +63,22 @@ const LUMPSUM_DEFAULT = 500_000;
 const MONTHLY_SIP_DEFAULT = 10_000;
 const INFLATION_DEFAULT_PCT = 6;
 
+/**
+ * Lumpsum, monthly SIP and inflation are all `required={false}` — clearing
+ * one of those NumberFields to blank (rather than typing an explicit "0")
+ * is a legitimate way to say "none", but NumberField's onChange reports
+ * that blank state as `NaN`, not `0` (see CalcShell.tsx: it has to, so a
+ * user can backspace through all the digits of a *required* field without
+ * the value snapping back to 0 mid-edit). Left uncorrected here, that NaN
+ * silently propagates through every downstream figure — the whole result
+ * quietly goes blank with no error, which is what a user backspacing the
+ * lumpsum to nothing (fully intending "0") actually experiences. Coerce at
+ * the point of use instead of touching the shared NumberField.
+ */
+function orZero(v: number): number {
+  return Number.isFinite(v) ? v : 0;
+}
+
 export function ReitPortfolioBuilder() {
   const palette = usePalette();
   const [lumpsum, setLumpsum] = useState(LUMPSUM_DEFAULT);
@@ -80,7 +96,7 @@ export function ReitPortfolioBuilder() {
 
   const result = useMemo(() => {
     if (!submitted || !weightsAreValid(weights)) return null;
-    return buildReitPortfolio({ lumpsum, monthlySip, months, weights, assumptions });
+    return buildReitPortfolio({ lumpsum: orZero(lumpsum), monthlySip: orZero(monthlySip), months, weights, assumptions });
   }, [submitted, lumpsum, monthlySip, months, weights, assumptions]);
 
   const totalTaxableOtherSources = useMemo(() => {
@@ -93,11 +109,11 @@ export function ReitPortfolioBuilder() {
   // "rental yield equivalent" callout below is built around.
   const realFinalValue = useMemo(() => {
     if (!result) return 0;
-    return deflateToToday(result.finalValue, inflationPct / 100, months);
+    return deflateToToday(result.finalValue, orZero(inflationPct) / 100, months);
   }, [result, inflationPct, months]);
   const monthlyIncomeAtHorizonReal = useMemo(() => {
     if (!result) return 0;
-    return deflateToToday(result.monthlyIncomeAtHorizonNominal, inflationPct / 100, months);
+    return deflateToToday(result.monthlyIncomeAtHorizonNominal, orZero(inflationPct) / 100, months);
   }, [result, inflationPct, months]);
 
   const historicalInstruments = getReitInstruments();
@@ -217,47 +233,65 @@ export function ReitPortfolioBuilder() {
             <summary className="cursor-pointer text-sm text-ink">Per-REIT assumptions (advanced)</summary>
             <div className="mt-3 flex flex-col gap-4">
               <p className="text-xs text-ink-muted">
-                Distribution yield defaults to each REIT&rsquo;s own trailing yield-range midpoint; NAV growth defaults to a haircut trailing price CAGR — deliberately below the historical figure. Raise either only deliberately.
+                Distribution yield defaults to each REIT&rsquo;s own trailing yield-range midpoint; NAV growth defaults to a haircut trailing price CAGR — deliberately below the historical figure. Raise either only deliberately. Tax-adjusted yield is computed, not editable — it nets the distribution yield above against that REIT&rsquo;s effective tax rate on distributions at slab rate, since that&rsquo;s a rate this module already ships per REIT rather than a further assumption to set.
               </p>
-              {REIT_DISPLAY.map((r) => (
-                <div key={r.id} className="flex flex-col gap-2">
-                  <p className="text-sm text-ink">{r.shortLabel}</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="flex flex-col gap-1 text-xs">
-                      <span className="text-ink-muted">NAV growth, annual (%)</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        step={0.1}
-                        value={Math.round(assumptions[r.id].navGrowthPct * 1000) / 10}
-                        onChange={(e) =>
-                          setAssumptions({
-                            ...assumptions,
-                            [r.id]: { ...assumptions[r.id], navGrowthPct: Number(e.target.value) / 100 },
-                          })
-                        }
-                        className="rounded-sm border border-hairline bg-paper px-2 py-1 font-mono tabular-nums text-ink"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-xs">
-                      <span className="text-ink-muted">Distribution yield, annual (%)</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        step={0.1}
-                        value={Math.round(assumptions[r.id].yieldPct * 1000) / 10}
-                        onChange={(e) =>
-                          setAssumptions({
-                            ...assumptions,
-                            [r.id]: { ...assumptions[r.id], yieldPct: Number(e.target.value) / 100 },
-                          })
-                        }
-                        className="rounded-sm border border-hairline bg-paper px-2 py-1 font-mono tabular-nums text-ink"
-                      />
-                    </label>
+              {REIT_DISPLAY.map((r) => {
+                const instrument = historicalInstruments.find((i) => i.id === r.id);
+                const taxRatePct = instrument?.effectiveTaxRateOnDistributions.forSlabRatePct ?? 0;
+                const taxAdjustedYieldPct = assumptions[r.id].yieldPct * (1 - taxRatePct);
+                return (
+                  <div key={r.id} className="flex flex-col gap-2">
+                    <p className="text-sm text-ink">{r.shortLabel}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className="flex flex-col gap-1 text-xs">
+                        <span className="text-ink-muted">NAV growth, annual (%)</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          step={0.1}
+                          value={Math.round(assumptions[r.id].navGrowthPct * 1000) / 10}
+                          onChange={(e) =>
+                            setAssumptions({
+                              ...assumptions,
+                              [r.id]: { ...assumptions[r.id], navGrowthPct: Number(e.target.value) / 100 },
+                            })
+                          }
+                          className="rounded-sm border border-hairline bg-paper px-2 py-1 font-mono tabular-nums text-ink"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs">
+                        <span className="text-ink-muted">Distribution yield, annual (%)</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          step={0.1}
+                          value={Math.round(assumptions[r.id].yieldPct * 1000) / 10}
+                          onChange={(e) =>
+                            setAssumptions({
+                              ...assumptions,
+                              [r.id]: { ...assumptions[r.id], yieldPct: Number(e.target.value) / 100 },
+                            })
+                          }
+                          className="rounded-sm border border-hairline bg-paper px-2 py-1 font-mono tabular-nums text-ink"
+                        />
+                      </label>
+                      <div className="flex flex-col gap-1 text-xs">
+                        <span className="text-ink-muted">Tax-adjusted yield (%)</span>
+                        <span
+                          title={
+                            instrument
+                              ? `After a ${(taxRatePct * 100).toFixed(0)}% effective tax rate on distributions at slab rate — ${instrument.effectiveTaxRateOnDistributions.note}`
+                              : undefined
+                          }
+                          className="rounded-sm border border-hairline bg-paper/50 px-2 py-1 font-mono tabular-nums text-ink-muted"
+                        >
+                          {(taxAdjustedYieldPct * 100).toFixed(1)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </details>
 
@@ -339,10 +373,6 @@ export function ReitPortfolioBuilder() {
               ariaLabel="Total distributions received over the horizon, split into interest, dividend, rental and return-of-capital components"
             />
           </div>
-
-          <Callout tone="warning">
-            Short, skewed track records: Nexus (listed 2023) and Knowledge Realty (listed 2025) have only a few years or quarters of history, largely spanning a post-pandemic office/retail recovery. A blend weighted toward them is not a forward guarantee of the same returns — the NAV-growth defaults above are already haircut below the trailing price CAGR for this reason; raise them only deliberately.
-          </Callout>
 
           <p className="max-w-xl text-sm text-ink-muted">
             This shows distributions received and mark-to-market NAV value — it does not model selling the units and paying exit capital-gains tax, or your household&rsquo;s actual marginal rate on the taxable distribution income above.
