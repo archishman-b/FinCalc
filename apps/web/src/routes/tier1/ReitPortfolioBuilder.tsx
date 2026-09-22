@@ -16,7 +16,7 @@ import {
 import { usePalette } from '../../lib/theme';
 import { Amount } from '../../components/Amount';
 import { CalcShell, Callout, NumberField, SubmitButton } from '../../components/CalcShell';
-import { BreakdownBarChart, GrowthWithIncomeChart } from '../../components/charts';
+import { GrowthWithIncomeChart, MonthlyDividendYieldChart } from '../../components/charts';
 
 /**
  * Tier-line module (added Sept 2026, alongside the home-page re-theme):
@@ -362,21 +362,12 @@ export function ReitPortfolioBuilder() {
           </div>
 
           <div>
-            <p className="mb-3 text-sm text-ink">Distribution composition over the full horizon</p>
-            <BreakdownBarChart
-              data={[
-                { label: 'Interest', value: result.blendedComponentTotals.interest, color: palette.rust },
-                { label: 'Dividend', value: result.blendedComponentTotals.dividend, color: palette.moss },
-                { label: 'Rental', value: result.blendedComponentTotals.rental, color: palette.ochre },
-                { label: 'Return of capital', value: result.blendedComponentTotals.returnOfCapital, color: palette.ink },
-              ]}
-              ariaLabel="Total distributions received over the horizon, split into interest, dividend, rental and return-of-capital components"
+            <p className="mb-3 text-sm text-ink">Monthly dividend payouts and post-tax yield</p>
+            <MonthlyDividendYieldChart
+              data={[...result.monthlyDistributionRows]}
+              ariaLabel="Month by month blended dividend payouts split into interest, dividend, rental and return-of-capital components, with the portfolio's post-tax annualised yield overlaid as a line"
             />
           </div>
-
-          <p className="max-w-xl text-sm text-ink-muted">
-            This shows distributions received and mark-to-market NAV value — it does not model selling the units and paying exit capital-gains tax, or your household&rsquo;s actual marginal rate on the taxable distribution income above.
-          </p>
         </section>
       )}
     </CalcShell>

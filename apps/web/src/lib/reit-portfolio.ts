@@ -173,6 +173,28 @@ export interface ReitPortfolioResult {
   rows: readonly MonthlyRow[];
   /** Cumulative invested vs. blended portfolio value, one point per year, plus that year's own gross distributions — feeds GrowthWithIncomeChart's dual-axis view (cumulative lines against annual distribution bars). */
   yearlyRows: readonly { year: number; invested: number; value: number; distributions: number }[];
+  /**
+   * The month-by-month version of blendedComponentTotals, one row per
+   * month of the horizon rather than one total — feeds
+   * MonthlyDividendYieldChart's stacked-bar view of what's actually being
+   * paid out, month to month. postTaxYieldPct applies each REIT's own
+   * effectiveTaxRateOnDistributions (slab rate, the same reference figure
+   * the "Tax-adjusted yield" assumption field uses) to that REIT's actual
+   * gross payout that month — not the target weight, since a leg's real
+   * share of the portfolio's distributions drifts from its starting
+   * weight as the legs compound at different rates — then divides the
+   * blended post-tax rupee amount by the portfolio's value coming into
+   * that month (mirroring reitPosition()'s own holdingBase convention)
+   * and annualises it into a percentage.
+   */
+  monthlyDistributionRows: readonly {
+    month: number;
+    interest: number;
+    dividend: number;
+    rental: number;
+    returnOfCapital: number;
+    postTaxYieldPct: number;
+  }[];
   totalInvested: number;
   finalValue: number;
   /** Sum of every month's gross distribution across the whole horizon, all 5 legs. */
@@ -239,6 +261,9 @@ export function buildReitPortfolio(input: ReitPortfolioInput): ReitPortfolioResu
   const legRows = legs.map((leg) => ({ leg, rows: leg.position.project(input.months, ctx) }));
   const legDistributions = legs.map((leg) => ({ leg, dist: leg.position.distributions(input.months, ctx) }));
 
+  const instruments = getReitInstruments();
+  const taxRateByReit = new Map(instruments.map((i) => [i.id, i.effectiveTaxRateOnDistributions.forSlabRatePct]));
+
   const rows: MonthlyRow[] = [];
   for (let m = 1; m <= input.months; m++) {
     let cashOut = 0;
@@ -261,6 +286,28 @@ export function buildReitPortfolio(input: ReitPortfolioInput): ReitPortfolioResu
       liabilityBalance: 0,
       liquidityTier: 1,
     });
+  }
+
+  const monthlyDistributionRows: { month: number; interest: number; dividend: number; rental: number; returnOfCapital: number; postTaxYieldPct: number }[] = [];
+  for (let m = 1; m <= input.months; m++) {
+    let interest = 0;
+    let dividend = 0;
+    let rental = 0;
+    let returnOfCapital = 0;
+    let postTaxDistribution = 0;
+    for (const { leg, dist } of legDistributions) {
+      const d = dist[m - 1]!;
+      interest = round2(interest + d.interest);
+      dividend = round2(dividend + d.dividend);
+      rental = round2(rental + d.rental);
+      returnOfCapital = round2(returnOfCapital + d.returnOfCapital);
+      const taxRate = taxRateByReit.get(leg.reitId) ?? 0;
+      postTaxDistribution = round2(postTaxDistribution + d.grossDistribution * (1 - taxRate));
+    }
+    // Value coming into this month — the same "prior close, or month-1's own contribution" convention reitPosition() uses for holdingBase, applied to the blended portfolio.
+    const valueComingIn = m === 1 ? round2(legs.reduce((s, leg) => s + leg.allocatedLumpsum + leg.allocatedMonthlySip, 0)) : rows[m - 2]!.assetValue;
+    const postTaxYieldPct = valueComingIn > 0 ? round3(((postTaxDistribution * 12) / valueComingIn) * 100) : 0;
+    monthlyDistributionRows.push({ month: m, interest, dividend, rental, returnOfCapital, postTaxYieldPct });
   }
 
   const yearlyRows: { year: number; invested: number; value: number; distributions: number }[] = [];
@@ -289,5 +336,5 @@ export function buildReitPortfolio(input: ReitPortfolioInput): ReitPortfolioResu
     }
   }
 
-  return { legs, rows, yearlyRows, totalInvested, finalValue, totalGrossDistributions, monthlyIncomeAtHorizonNominal, blendedComponentTotals };
+  return { legs, rows, yearlyRows, monthlyDistributionRows, totalInvested, finalValue, totalGrossDistributions, monthlyIncomeAtHorizonNominal, blendedComponentTotals };
 }

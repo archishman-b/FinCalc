@@ -59,7 +59,6 @@ export function CalcShell({
       </div>
 
       <footer className="mt-16 max-w-md space-y-1 text-sm text-ink-muted">
-        <p>Runs entirely in your browser. No backend, no accounts, nothing you enter leaves this page.</p>
         <p>Information, not advice — FinCalc is not SEBI- or IRDAI-registered investment advice.</p>
       </footer>
     </main>

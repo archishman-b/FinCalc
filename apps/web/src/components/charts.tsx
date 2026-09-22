@@ -275,6 +275,137 @@ export function GrowthWithIncomeChart({
   );
 }
 
+/**
+ * Month-by-month view of the blended portfolio's actual dividend payouts,
+ * split into the same four components BreakdownBarChart's full-horizon
+ * version showed (interest/dividend/rental/return-of-capital), but stacked
+ * bar-by-bar for every month of the horizon rather than summed into one
+ * total — the brief's "month on month" ask. The post-tax annualised yield
+ * — each REIT's own effective-tax-rate-on-distributions (slab rate, the
+ * same figure the Tax-adjusted yield assumption field uses) applied to
+ * its actual monthly payout, blended, divided by the portfolio's value
+ * coming into that month — is overlaid as a line on a secondary axis, the
+ * same dual-axis shape AmortizationChart and GrowthWithIncomeChart use.
+ * X-axis ticks thin themselves to roughly one per year (`tickInterval`
+ * scales with the data length) so a 30-year, 360-month horizon stays
+ * legible instead of rendering 360 overlapping labels.
+ */
+/**
+ * Recharts' auto-generated `<Legend>` for a stacked-bar-plus-line
+ * ComposedChart doesn't preserve JSX declaration order (confirmed against
+ * AmortizationChart's already-shipped 2-bar-plus-line chart, which has the
+ * same scramble) — with 5 series here rather than 3, that's confusing
+ * enough to warrant a fixed rendering order. The library's own `payload`
+ * override prop for this exists at runtime but isn't in this version's
+ * type declarations (`Omit<Props, ... | 'payload' | ...>`), so this
+ * renders the legend itself via the documented `content` render-prop
+ * instead, matching LEGEND_STYLE.
+ */
+function renderFixedLegend(items: { value: string; type: 'square' | 'line'; color: string }[], ink: string) {
+  return (
+    <ul className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 pt-2" style={{ ...LEGEND_STYLE, color: ink }}>
+      {items.map((item) => (
+        <li key={item.value} className="flex items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            style={
+              item.type === 'line'
+                ? { display: 'inline-block', width: 12, height: 2, background: item.color }
+                : { display: 'inline-block', width: 10, height: 10, background: item.color }
+            }
+          />
+          {item.value}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function MonthlyDividendYieldChart({
+  data,
+  ariaLabel,
+}: {
+  data: { month: number; interest: number; dividend: number; rental: number; returnOfCapital: number; postTaxYieldPct: number }[];
+  ariaLabel: string;
+}) {
+  const palette = usePalette();
+  const tickInterval = Math.max(0, Math.round(data.length / 10) - 1);
+  return (
+    <div className="h-72 w-full" role="img" aria-label={ariaLabel}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={palette.hairline} vertical={false} />
+          <XAxis
+            dataKey="month"
+            interval={tickInterval}
+            tickFormatter={(v: number) => `Yr ${Math.ceil(v / 12)}`}
+            tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
+            axisLine={{ stroke: palette.hairline }}
+            tickLine={false}
+          />
+          <YAxis
+            yAxisId="amount"
+            tickFormatter={(v: number) => formatINR(v, { compact: true, decimals: 0 })}
+            tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
+            axisLine={false}
+            tickLine={false}
+            width={64}
+          />
+          <YAxis
+            yAxisId="yieldPct"
+            orientation="right"
+            tickFormatter={(v: number) => `${v.toFixed(1)}%`}
+            tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
+            axisLine={false}
+            tickLine={false}
+            width={48}
+          />
+          <Tooltip
+            formatter={(v, name) => (name === 'Post-tax yield (annualised)' ? [`${Number(v).toFixed(2)}%`, name] : [formatINR(Number(v), { compact: true }), name])}
+            labelFormatter={(v) => `Year ${Math.ceil(Number(v) / 12)}, month ${((Number(v) - 1) % 12) + 1}`}
+            contentStyle={{
+              fontFamily: 'ui-monospace, monospace',
+              fontSize: 13,
+              background: palette.paper,
+              border: `1px solid ${palette.hairline}`,
+              borderRadius: 4,
+              color: palette.ink,
+            }}
+          />
+          <Legend
+            content={() =>
+              renderFixedLegend(
+                [
+                  { value: 'Interest', type: 'square', color: palette.rust },
+                  { value: 'Dividend', type: 'square', color: palette.moss },
+                  { value: 'Rental', type: 'square', color: palette.ochre },
+                  { value: 'Return of capital', type: 'square', color: palette.ink },
+                  { value: 'Post-tax yield (annualised)', type: 'line', color: palette.inkMuted },
+                ],
+                palette.ink,
+              )
+            }
+          />
+          <Bar isAnimationActive={false} yAxisId="amount" dataKey="interest" name="Interest" stackId="dist" fill={palette.rust} />
+          <Bar isAnimationActive={false} yAxisId="amount" dataKey="dividend" name="Dividend" stackId="dist" fill={palette.moss} />
+          <Bar isAnimationActive={false} yAxisId="amount" dataKey="rental" name="Rental" stackId="dist" fill={palette.ochre} />
+          <Bar isAnimationActive={false} yAxisId="amount" dataKey="returnOfCapital" name="Return of capital" stackId="dist" fill={palette.ink} radius={[2, 2, 0, 0]} />
+          <Line
+            isAnimationActive={false}
+            yAxisId="yieldPct"
+            type="monotone"
+            dataKey="postTaxYieldPct"
+            name="Post-tax yield (annualised)"
+            stroke={palette.inkMuted}
+            strokeWidth={2}
+            dot={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 /** A short list of labelled amounts as vertical bars — the capital-gains breakdown (gain / tax / net) and any other "a few numbers, side by side" comparison. Each bar takes its own color from `data`, defaulting to rust when not given, so a caller can highlight e.g. "tax" differently from "net proceeds" without a second series. */
 export function BreakdownBarChart({
   data,
