@@ -16,7 +16,7 @@ import {
 import { usePalette } from '../../lib/theme';
 import { Amount } from '../../components/Amount';
 import { CalcShell, Callout, NumberField, SubmitButton } from '../../components/CalcShell';
-import { GrowthWithIncomeChart, MonthlyDividendYieldChart } from '../../components/charts';
+import { GrowthWithIncomeChart, HistoricalDistributionChart } from '../../components/charts';
 
 /**
  * Tier-line module (added Sept 2026, alongside the home-page re-theme):
@@ -362,10 +362,13 @@ export function ReitPortfolioBuilder() {
           </div>
 
           <div>
-            <p className="mb-3 text-sm text-ink">Monthly dividend payouts and post-tax yield</p>
-            <MonthlyDividendYieldChart
-              data={[...result.monthlyDistributionRows]}
-              ariaLabel="Month by month blended dividend payouts split into interest, dividend, rental and return-of-capital components, with the portfolio's post-tax annualised yield overlaid as a line"
+            <p className="mb-3 text-sm text-ink">What REIT payouts have actually looked like, quarter by quarter</p>
+            <p className="mb-3 text-xs text-ink-muted">
+              Built from each REIT&rsquo;s own disclosed distribution record, not a projection — scaled to your total invested amount at your chosen weights. A REIT contributes nothing to a quarter before it existed.
+            </p>
+            <HistoricalDistributionChart
+              data={[...result.historicalDistributionRows]}
+              ariaLabel="Actual historical dividend payouts, quarter by quarter, split into interest, dividend, rental and return-of-capital components at your chosen weights and invested amount, with the blended post-tax annualised yield overlaid as a line"
             />
           </div>
         </section>

@@ -276,19 +276,20 @@ export function GrowthWithIncomeChart({
 }
 
 /**
- * Month-by-month view of the blended portfolio's actual dividend payouts,
- * split into the same four components BreakdownBarChart's full-horizon
- * version showed (interest/dividend/rental/return-of-capital), but stacked
- * bar-by-bar for every month of the horizon rather than summed into one
- * total — the brief's "month on month" ask. The post-tax annualised yield
- * — each REIT's own effective-tax-rate-on-distributions (slab rate, the
- * same figure the Tax-adjusted yield assumption field uses) applied to
- * its actual monthly payout, blended, divided by the portfolio's value
- * coming into that month — is overlaid as a line on a secondary axis, the
- * same dual-axis shape AmortizationChart and GrowthWithIncomeChart use.
- * X-axis ticks thin themselves to roughly one per year (`tickInterval`
- * scales with the data length) so a 30-year, 360-month horizon stays
- * legible instead of rendering 360 overlapping labels.
+ * Quarter-by-quarter view of what the blended portfolio's dividend payouts
+ * have actually looked like, built from each REIT's own disclosed
+ * distribution record (reit-portfolio.ts's historicalDistributionSeries) —
+ * not a simulated forward projection. Split into the same four components
+ * BreakdownBarChart's full-horizon version showed (interest/dividend/
+ * rental/return-of-capital), stacked bar-by-bar per actual calendar
+ * quarter, so the real lumpiness of REIT payouts (quarterly, uneven
+ * amounts) is visible rather than smoothed away. The post-tax annualised
+ * yield — each REIT's own disclosed effectivePostTaxYieldPct, blended by
+ * weight — is overlaid as a line on a secondary axis, the same dual-axis
+ * shape AmortizationChart and GrowthWithIncomeChart use. X-axis ticks thin
+ * themselves (`tickInterval` scales with the data length) since the full
+ * history runs to ~29 quarters across the 5 REITs' different listing
+ * dates.
  */
 /**
  * Recharts' auto-generated `<Legend>` for a stacked-bar-plus-line
@@ -321,24 +322,24 @@ function renderFixedLegend(items: { value: string; type: 'square' | 'line'; colo
   );
 }
 
-export function MonthlyDividendYieldChart({
+export function HistoricalDistributionChart({
   data,
   ariaLabel,
 }: {
-  data: { month: number; interest: number; dividend: number; rental: number; returnOfCapital: number; postTaxYieldPct: number }[];
+  data: { quarterKey: string; quarterLabel: string; interest: number; dividend: number; rental: number; returnOfCapital: number; postTaxYieldPct: number }[];
   ariaLabel: string;
 }) {
   const palette = usePalette();
-  const tickInterval = Math.max(0, Math.round(data.length / 10) - 1);
+  // ~29 quarters across the full history — thin to roughly one label per year (every 4th quarter) rather than every quarter.
+  const tickInterval = Math.max(0, Math.round(data.length / 8) - 1);
   return (
     <div className="h-72 w-full" role="img" aria-label={ariaLabel}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={palette.hairline} vertical={false} />
           <XAxis
-            dataKey="month"
+            dataKey="quarterLabel"
             interval={tickInterval}
-            tickFormatter={(v: number) => `Yr ${Math.ceil(v / 12)}`}
             tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
             axisLine={{ stroke: palette.hairline }}
             tickLine={false}
@@ -362,7 +363,6 @@ export function MonthlyDividendYieldChart({
           />
           <Tooltip
             formatter={(v, name) => (name === 'Post-tax yield (annualised)' ? [`${Number(v).toFixed(2)}%`, name] : [formatINR(Number(v), { compact: true }), name])}
-            labelFormatter={(v) => `Year ${Math.ceil(Number(v) / 12)}, month ${((Number(v) - 1) % 12) + 1}`}
             contentStyle={{
               fontFamily: 'ui-monospace, monospace',
               fontSize: 13,

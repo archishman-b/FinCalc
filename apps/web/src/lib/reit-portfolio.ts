@@ -105,6 +105,135 @@ export function defaultComponentSplit(reitId: ReitId, history: readonly ReitDist
   return { interest: split.interest, dividend: split.dividend, rental: split.rental, returnOfCapital: split.returnOfCapital };
 }
 
+export interface HistoricalDistributionRow {
+  /** Sort key, e.g. "2019-Q3" — plain lexicographic sort puts these in chronological order since the quarter digit never exceeds 4. */
+  quarterKey: string;
+  /** Display label, e.g. "Q3 2019". */
+  quarterLabel: string;
+  interest: number;
+  dividend: number;
+  rental: number;
+  returnOfCapital: number;
+  /** Weighted blend of each REIT's own disclosed effectivePostTaxYieldPct for that quarter (already an annualised figure, per reit-reference.ts's ReitDistributionRecord) — expressed here as a percentage (4.88, not 0.0488). */
+  postTaxYieldPct: number;
+}
+
+/** The calendar quarter a distribution-record date falls in, as a sortable key plus a display label. */
+function quarterOf(isoDate: string): { key: string; label: string } {
+  const year = Number(isoDate.slice(0, 4));
+  const month = Number(isoDate.slice(5, 7));
+  const quarter = Math.ceil(month / 3);
+  return { key: `${year}-Q${quarter}`, label: `Q${quarter} ${year}` };
+}
+
+/**
+ * The actual historical quarterly payout pattern for a weighted REIT
+ * portfolio — built directly from each REIT's own disclosed distribution
+ * record (reit-reference.ts's ReitDistributionRecord), not a forward
+ * simulation. Added after explicit user correction: an earlier version of
+ * this chart smoothed a simulated total evenly across every month of the
+ * user's chosen horizon, which doesn't show what REIT distributions
+ * actually look like — real ones are quarterly and uneven.
+ *
+ * For each of a REIT's own quarterly records, a component's rupee
+ * contribution is (component ÷ that quarter's own unit price) × (this
+ * REIT's target weight × totalInvested) — i.e. "if this target ₹
+ * allocation had been held in this REIT throughout its listed history,
+ * rebalanced to keep that ₹ amount constant, here's what each quarter's
+ * actual payout would have been." That avoids needing a separate
+ * unit-count model: dividing by the record's own contemporaneous price
+ * already converts "rupees per unit" into "rupees per rupee invested,"
+ * using each quarter's own price rather than one historical purchase
+ * price. Records across the 5 REITs are bucketed by calendar quarter
+ * (not aligned to a single record date, since each REIT reports on its
+ * own schedule) before blending.
+ *
+ * Newer REITs (Knowledge Realty listed 2025; Nexus 2023) have no record
+ * for a quarter before they existed — that REIT contributes 0 for that
+ * quarter, in both the ₹ components and the post-tax yield blend, rather
+ * than renormalising the other REITs' weights upward. That's a deliberate
+ * choice, not an oversight: part of the target allocation genuinely
+ * couldn't have earned anything before the REIT existed, and showing that
+ * as a real dip is more historically honest than papering over it.
+ */
+export function historicalDistributionSeries(
+  weights: Record<ReitId, number>,
+  totalInvested: number,
+  history: readonly ReitDistributionRecord[] = getReitDistributionHistory(),
+): readonly HistoricalDistributionRow[] {
+  interface QuarterReitAgg {
+    priceInr: number;
+    interestInr: number;
+    dividendInr: number;
+    rentalInr: number;
+    returnOfCapitalInr: number;
+    postTaxYieldPct: number;
+    recordsObserved: number;
+  }
+  const buckets = new Map<string, { label: string; byReit: Map<ReitId, QuarterReitAgg> }>();
+
+  for (const r of history) {
+    const { key, label } = quarterOf(r.date);
+    if (!buckets.has(key)) buckets.set(key, { label, byReit: new Map() });
+    const byReit = buckets.get(key)!.byReit;
+    const dividendInr = r.dividendExemptInr + r.dividendTaxableInr;
+    const existing = byReit.get(r.reitId);
+    if (!existing) {
+      byReit.set(r.reitId, {
+        priceInr: r.recordPriceInr,
+        interestInr: r.interestInr,
+        dividendInr,
+        rentalInr: r.otherIncomeInr,
+        returnOfCapitalInr: r.debtRepaymentCapReturnInr,
+        postTaxYieldPct: r.effectivePostTaxYieldPct,
+        recordsObserved: 1,
+      });
+    } else {
+      // Rare: more than one record for the same REIT lands in the same calendar quarter — sum the rupee-per-unit amounts, average price and yield across them.
+      const n = existing.recordsObserved;
+      existing.interestInr += r.interestInr;
+      existing.dividendInr += dividendInr;
+      existing.rentalInr += r.otherIncomeInr;
+      existing.returnOfCapitalInr += r.debtRepaymentCapReturnInr;
+      existing.priceInr = (existing.priceInr * n + r.recordPriceInr) / (n + 1);
+      existing.postTaxYieldPct = (existing.postTaxYieldPct * n + r.effectivePostTaxYieldPct) / (n + 1);
+      existing.recordsObserved = n + 1;
+    }
+  }
+
+  return [...buckets.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([quarterKey, bucket]) => {
+      let interest = 0;
+      let dividend = 0;
+      let rental = 0;
+      let returnOfCapital = 0;
+      let postTaxYieldFraction = 0;
+      for (const reitId of REIT_IDS) {
+        const fraction = (weights[reitId] ?? 0) / 100;
+        if (fraction <= 0) continue;
+        const agg = bucket.byReit.get(reitId);
+        if (!agg || agg.priceInr <= 0) continue; // REIT has no record this quarter — contributes 0, per the historically-honest choice above.
+        const investedInReit = totalInvested * fraction;
+        const scale = investedInReit / agg.priceInr;
+        interest += scale * agg.interestInr;
+        dividend += scale * agg.dividendInr;
+        rental += scale * agg.rentalInr;
+        returnOfCapital += scale * agg.returnOfCapitalInr;
+        postTaxYieldFraction += fraction * agg.postTaxYieldPct;
+      }
+      return {
+        quarterKey,
+        quarterLabel: bucket.label,
+        interest: round2(interest),
+        dividend: round2(dividend),
+        rental: round2(rental),
+        returnOfCapital: round2(returnOfCapital),
+        postTaxYieldPct: round3(postTaxYieldFraction * 100),
+      };
+    });
+}
+
 export interface ReitAssumption {
   navGrowthPct: number;
   yieldPct: number;
@@ -174,27 +303,15 @@ export interface ReitPortfolioResult {
   /** Cumulative invested vs. blended portfolio value, one point per year, plus that year's own gross distributions — feeds GrowthWithIncomeChart's dual-axis view (cumulative lines against annual distribution bars). */
   yearlyRows: readonly { year: number; invested: number; value: number; distributions: number }[];
   /**
-   * The month-by-month version of blendedComponentTotals, one row per
-   * month of the horizon rather than one total — feeds
-   * MonthlyDividendYieldChart's stacked-bar view of what's actually being
-   * paid out, month to month. postTaxYieldPct applies each REIT's own
-   * effectiveTaxRateOnDistributions (slab rate, the same reference figure
-   * the "Tax-adjusted yield" assumption field uses) to that REIT's actual
-   * gross payout that month — not the target weight, since a leg's real
-   * share of the portfolio's distributions drifts from its starting
-   * weight as the legs compound at different rates — then divides the
-   * blended post-tax rupee amount by the portfolio's value coming into
-   * that month (mirroring reitPosition()'s own holdingBase convention)
-   * and annualises it into a percentage.
+   * The actual historical quarterly distribution pattern, blended across
+   * the 5 legs by their target weight — replaces an earlier smoothed
+   * month-by-month simulation after explicit user feedback that the
+   * payout chart needs to show real REIT cash-flow lumpiness (quarterly,
+   * uneven) rather than an evenly-spread projected total. Feeds
+   * HistoricalDistributionChart. See historicalDistributionSeries()'s own
+   * doc comment for the exact blending rule.
    */
-  monthlyDistributionRows: readonly {
-    month: number;
-    interest: number;
-    dividend: number;
-    rental: number;
-    returnOfCapital: number;
-    postTaxYieldPct: number;
-  }[];
+  historicalDistributionRows: readonly HistoricalDistributionRow[];
   totalInvested: number;
   finalValue: number;
   /** Sum of every month's gross distribution across the whole horizon, all 5 legs. */
@@ -261,9 +378,6 @@ export function buildReitPortfolio(input: ReitPortfolioInput): ReitPortfolioResu
   const legRows = legs.map((leg) => ({ leg, rows: leg.position.project(input.months, ctx) }));
   const legDistributions = legs.map((leg) => ({ leg, dist: leg.position.distributions(input.months, ctx) }));
 
-  const instruments = getReitInstruments();
-  const taxRateByReit = new Map(instruments.map((i) => [i.id, i.effectiveTaxRateOnDistributions.forSlabRatePct]));
-
   const rows: MonthlyRow[] = [];
   for (let m = 1; m <= input.months; m++) {
     let cashOut = 0;
@@ -286,28 +400,6 @@ export function buildReitPortfolio(input: ReitPortfolioInput): ReitPortfolioResu
       liabilityBalance: 0,
       liquidityTier: 1,
     });
-  }
-
-  const monthlyDistributionRows: { month: number; interest: number; dividend: number; rental: number; returnOfCapital: number; postTaxYieldPct: number }[] = [];
-  for (let m = 1; m <= input.months; m++) {
-    let interest = 0;
-    let dividend = 0;
-    let rental = 0;
-    let returnOfCapital = 0;
-    let postTaxDistribution = 0;
-    for (const { leg, dist } of legDistributions) {
-      const d = dist[m - 1]!;
-      interest = round2(interest + d.interest);
-      dividend = round2(dividend + d.dividend);
-      rental = round2(rental + d.rental);
-      returnOfCapital = round2(returnOfCapital + d.returnOfCapital);
-      const taxRate = taxRateByReit.get(leg.reitId) ?? 0;
-      postTaxDistribution = round2(postTaxDistribution + d.grossDistribution * (1 - taxRate));
-    }
-    // Value coming into this month — the same "prior close, or month-1's own contribution" convention reitPosition() uses for holdingBase, applied to the blended portfolio.
-    const valueComingIn = m === 1 ? round2(legs.reduce((s, leg) => s + leg.allocatedLumpsum + leg.allocatedMonthlySip, 0)) : rows[m - 2]!.assetValue;
-    const postTaxYieldPct = valueComingIn > 0 ? round3(((postTaxDistribution * 12) / valueComingIn) * 100) : 0;
-    monthlyDistributionRows.push({ month: m, interest, dividend, rental, returnOfCapital, postTaxYieldPct });
   }
 
   const yearlyRows: { year: number; invested: number; value: number; distributions: number }[] = [];
@@ -336,5 +428,15 @@ export function buildReitPortfolio(input: ReitPortfolioInput): ReitPortfolioResu
     }
   }
 
-  return { legs, rows, yearlyRows, monthlyDistributionRows, totalInvested, finalValue, totalGrossDistributions, monthlyIncomeAtHorizonNominal, blendedComponentTotals };
+  return {
+    legs,
+    rows,
+    yearlyRows,
+    historicalDistributionRows: historicalDistributionSeries(input.weights, totalInvested, history),
+    totalInvested,
+    finalValue,
+    totalGrossDistributions,
+    monthlyIncomeAtHorizonNominal,
+    blendedComponentTotals,
+  };
 }
