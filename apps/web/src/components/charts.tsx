@@ -222,11 +222,23 @@ export function GrowthChart({ data, ariaLabel }: { data: { year: number; investe
 export function GrowthWithIncomeChart({
   data,
   ariaLabel,
+  contributionEndYear,
 }: {
   data: { year: number; invested: number; value: number; distributions: number }[];
   ariaLabel: string;
+  /**
+   * The last year contributions were made, when a caller lets the
+   * contribution and evaluation horizons differ (e.g. contribute for 15
+   * years, evaluate at year 20) — draws a dashed vertical marker there so
+   * the "Invested" line's plateau afterward reads as contributions
+   * stopping, not a data error. Omitted, or at/after the data's final
+   * year, draws nothing — the common case where contributions run the
+   * whole horizon.
+   */
+  contributionEndYear?: number;
 }) {
   const palette = usePalette();
+  const lastYear = data.length > 0 ? data[data.length - 1]!.year : 0;
   return (
     <div className="h-72 w-full" role="img" aria-label={ariaLabel}>
       <ResponsiveContainer width="100%" height="100%">
@@ -269,6 +281,16 @@ export function GrowthWithIncomeChart({
             }}
           />
           <Legend wrapperStyle={{ ...LEGEND_STYLE, color: palette.ink }} />
+          {contributionEndYear !== undefined && contributionEndYear < lastYear && (
+            <ReferenceLine
+              yAxisId="cumulative"
+              x={contributionEndYear}
+              stroke={palette.inkMuted}
+              strokeOpacity={0.6}
+              strokeDasharray="4 4"
+              label={{ value: `Contributions end, Yr ${contributionEndYear}`, position: 'insideTopLeft', fill: palette.inkMuted, fontSize: 11 }}
+            />
+          )}
           <Bar isAnimationActive={false} yAxisId="income" dataKey="distributions" name="Distributions that year" fill={palette.moss} fillOpacity={0.55} radius={[2, 2, 0, 0]} />
           <Area isAnimationActive={false} yAxisId="cumulative" type="monotone" dataKey="value" name="Portfolio value" stroke={palette.rust} fill={palette.rust} fillOpacity={0.15} strokeWidth={2} />
           <Area isAnimationActive={false} yAxisId="cumulative" type="monotone" dataKey="invested" name="Invested" stroke={palette.ink} fill={palette.ink} fillOpacity={0.06} strokeWidth={1.5} />
@@ -310,25 +332,35 @@ function num(v: number | string | undefined): number {
   return typeof v === 'number' ? v : 0;
 }
 
+/** Floors/ceils to one decimal place — keeps reitYDomain's computed axis bounds on tidy tenths-of-a-percent rather than jagged raw floats. */
+function floor1(v: number): number {
+  return Math.floor(v * 10) / 10;
+}
+function ceil1(v: number): number {
+  return Math.ceil(v * 10) / 10;
+}
+
 /**
- * A padded [min, max] y-domain for one REIT's indexed values within a
- * visible row slice — each panel in ReitIndexedPayoutChart's small
- * multiples gets its own range computed this way (e.g. ~80–105) instead of
- * every REIT sharing one 0–120ish scale, so a REIT whose payouts barely
- * move isn't rendered as a near-flat line just because another REIT in the
- * same selection swings much wider. Recomputed whenever the visible window
- * (the Brush range) changes, so zooming in tightens the range further.
- * Falls back to a fixed band when the REIT has no visible values, so the
- * panel still renders a sane axis rather than a degenerate [0, 0].
+ * A padded [min, max] y-domain for one REIT's effective post-tax yield %
+ * within a visible row slice — each panel in ReitIndexedPayoutChart's small
+ * multiples gets its own range computed this way (e.g. ~5.8–7.1%) instead of
+ * every REIT sharing one scale, so a REIT whose yield barely moves isn't
+ * rendered as a near-flat line just because another REIT in the same
+ * selection swings much wider. Recomputed whenever the visible window (the
+ * Brush range) changes, so zooming in tightens the range further. Falls
+ * back to a fixed band when the REIT has no visible values, so the panel
+ * still renders a sane axis rather than a degenerate [0, 0]; the 0.3-point
+ * minimum pad (rather than a fraction of the range) keeps a near-flat
+ * REIT's panel from padding down to an unreadably thin sliver.
  */
 function reitYDomain(rows: readonly Record<string, number | string>[], reitId: string): [number, number] {
-  const values = rows.map((r) => r[`${reitId}_indexed`]).filter((v): v is number => typeof v === 'number');
-  if (values.length === 0) return [90, 110];
+  const values = rows.map((r) => r[`${reitId}_postTaxYieldPct`]).filter((v): v is number => typeof v === 'number');
+  if (values.length === 0) return [4, 9];
   const min = Math.min(...values);
   const max = Math.max(...values);
-  if (min === max) return [min - 5, max + 5];
-  const pad = Math.max((max - min) * 0.15, 1);
-  return [Math.floor(min - pad), Math.ceil(max + pad)];
+  if (min === max) return [floor1(min - 0.5), ceil1(max + 0.5)];
+  const pad = Math.max((max - min) * 0.15, 0.3);
+  return [floor1(min - pad), ceil1(max + pad)];
 }
 
 /** Fixed per-panel geometry in ReitIndexedPayoutChart's small multiples — the same margin and y-axis width on every panel keep their plot areas pixel-aligned, so a given date lines up vertically across panels even though each is its own independent Recharts instance. */
@@ -336,26 +368,28 @@ const REIT_PANEL_MARGIN = { top: 4, right: 8, left: 0, bottom: 0 };
 const REIT_PANEL_Y_AXIS_WIDTH = 42;
 
 /**
- * Point-in-time view of what one or more REITs' dividend payouts have
- * actually looked like: a stack of small-multiple panels, one per REIT,
- * each its own line (indexed to 100 at that REIT's own FY2026-27 base
- * record — see reitIndexedDistributionSeries) with a dot at every date
- * that REIT actually disclosed a distribution. `connectNulls` draws a
- * plain visual connector across the other REITs' rows in between, not a
- * real value.
+ * Point-in-time view of what one or more REITs' distributions have
+ * actually yielded: a stack of small-multiple panels, one per REIT, each
+ * its own line — plotting that REIT's effective post-tax yield % (see
+ * reitIndexedDistributionSeries) — with a dot at every date that REIT
+ * actually disclosed a distribution. `connectNulls` draws a plain visual
+ * connector across the other REITs' rows in between, not a real value.
+ * Yield % is already comparable across REITs regardless of unit price, so
+ * — unlike the raw indexed-payout-level revision this replaced — nothing
+ * needs indexing to a common base first.
  *
- * Two earlier revisions put every REIT on one shared chart — first as
+ * Three earlier revisions put every REIT on one shared chart — first as
  * stacked bars (Recharts had to shrink every bar's width per REIT
  * selected, no amount of retuning the default window or an explicit bar
- * size kept a 5-REIT selection legible), then as overlaid lines on one
- * shared y-axis (legible, but a REIT with a narrow payout range still got
- * visually flattened by sharing a ~0–120 scale with a REIT that swings
+ * size kept a 5-REIT selection legible), then as overlaid indexed-payout
+ * lines on one shared y-axis (legible, but a REIT with a narrow range
+ * still got visually flattened by sharing a scale with a REIT that swings
  * wider). Per explicit user ask, this splits each REIT into its own panel
- * with its own y-axis domain (reitYDomain — e.g. ~80–105, not 0–120 for
- * every REIT), sharing one x-axis: only the bottom panel draws date ticks,
- * and the other panels' plot areas are pixel-aligned to it (same margin,
- * same fixed y-axis width) so a given date still lines up vertically
- * across panels.
+ * with its own y-axis domain (reitYDomain — e.g. ~5.8–7.1%, not one scale
+ * for every REIT), sharing one x-axis: only the bottom panel draws date
+ * ticks, and the other panels' plot areas are pixel-aligned to it (same
+ * margin, same fixed y-axis width) so a given date still lines up
+ * vertically across panels.
  *
  * A single Brush (Recharts' built-in pan/zoom scrollbar) sits under the
  * bottom panel only — its range is lifted into this component's own state
@@ -415,7 +449,7 @@ export function ReitIndexedPayoutChart({
                   <YAxis
                     domain={domain}
                     tickCount={3}
-                    tickFormatter={(v: number) => v.toFixed(0)}
+                    tickFormatter={(v: number) => `${v.toFixed(1)}%`}
                     tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
                     axisLine={false}
                     tickLine={false}
@@ -425,7 +459,7 @@ export function ReitIndexedPayoutChart({
                     content={({ active, payload }) => {
                       if (!active || !payload || payload.length === 0) return null;
                       const row = payload[0]?.payload as Record<string, number | string> | undefined;
-                      if (!row || typeof row[`${s.reitId}_indexed`] !== 'number') return null;
+                      if (!row || typeof row[`${s.reitId}_postTaxYieldPct`] !== 'number') return null;
                       return (
                         <div
                           style={{
@@ -460,7 +494,7 @@ export function ReitIndexedPayoutChart({
                   <Line
                     isAnimationActive={false}
                     type="monotone"
-                    dataKey={`${s.reitId}_indexed`}
+                    dataKey={`${s.reitId}_postTaxYieldPct`}
                     stroke={s.color}
                     strokeWidth={2.5}
                     dot={{ r: 3, strokeWidth: 0, fill: s.color }}

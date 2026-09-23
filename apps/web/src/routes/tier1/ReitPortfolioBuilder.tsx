@@ -85,7 +85,8 @@ export function ReitPortfolioBuilder() {
   const palette = usePalette();
   const [lumpsum, setLumpsum] = useState(LUMPSUM_DEFAULT);
   const [monthlySip, setMonthlySip] = useState(MONTHLY_SIP_DEFAULT);
-  const [years, setYears] = useState(YEARS_DEFAULT);
+  const [contributionYears, setContributionYears] = useState(YEARS_DEFAULT);
+  const [evaluationYears, setEvaluationYears] = useState(YEARS_DEFAULT);
   const [inflationPct, setInflationPct] = useState(INFLATION_DEFAULT_PCT);
   const [weights, setWeights] = useState<Record<ReitId, number>>(equalWeights);
   const [assumptions, setAssumptions] = useState<Record<ReitId, ReitAssumption>>(defaultAssumptions);
@@ -95,12 +96,20 @@ export function ReitPortfolioBuilder() {
 
   const weightTotal = sumWeights(weights);
   const weightsOk = weightsAreValid(weights);
-  const months = Math.round(years * 12);
+  const contributionMonths = Math.round(contributionYears * 12);
+  const evaluationMonths = Math.round(evaluationYears * 12);
 
   const result = useMemo(() => {
     if (!submitted || !weightsAreValid(weights)) return null;
-    return buildReitPortfolio({ lumpsum: orZero(lumpsum), monthlySip: orZero(monthlySip), months, weights, assumptions });
-  }, [submitted, lumpsum, monthlySip, months, weights, assumptions]);
+    return buildReitPortfolio({
+      lumpsum: orZero(lumpsum),
+      monthlySip: orZero(monthlySip),
+      months: evaluationMonths,
+      contributionMonths,
+      weights,
+      assumptions,
+    });
+  }, [submitted, lumpsum, monthlySip, evaluationMonths, contributionMonths, weights, assumptions]);
 
   const totalTaxableOtherSources = useMemo(() => {
     if (!result) return 0;
@@ -112,12 +121,12 @@ export function ReitPortfolioBuilder() {
   // "rental yield equivalent" callout below is built around.
   const realFinalValue = useMemo(() => {
     if (!result) return 0;
-    return deflateToToday(result.finalValue, orZero(inflationPct) / 100, months);
-  }, [result, inflationPct, months]);
+    return deflateToToday(result.finalValue, orZero(inflationPct) / 100, evaluationMonths);
+  }, [result, inflationPct, evaluationMonths]);
   const monthlyIncomeAtHorizonReal = useMemo(() => {
     if (!result) return 0;
-    return deflateToToday(result.monthlyIncomeAtHorizonNominal, orZero(inflationPct) / 100, months);
-  }, [result, inflationPct, months]);
+    return deflateToToday(result.monthlyIncomeAtHorizonNominal, orZero(inflationPct) / 100, evaluationMonths);
+  }, [result, inflationPct, evaluationMonths]);
 
   const historicalInstruments = getReitInstruments();
   const historicalAsOf = getReitInstrumentsAsOf();
@@ -153,7 +162,11 @@ export function ReitPortfolioBuilder() {
         >
           <NumberField label="Lumpsum, one-time" value={lumpsum} onChange={setLumpsum} step={50_000} min={0} required={false} />
           <NumberField label="Monthly SIP" value={monthlySip} onChange={setMonthlySip} step={1_000} min={0} required={false} />
-          <NumberField label="Years" value={years} onChange={setYears} step={1} min={1} max={30} />
+          <NumberField label="Years contributing" value={contributionYears} onChange={setContributionYears} step={1} min={1} max={30} />
+          <NumberField label="Evaluate at year" value={evaluationYears} onChange={setEvaluationYears} step={1} min={1} max={30} />
+          <p className="-mt-2.5 text-xs text-ink-muted">
+            If you evaluate later than you contribute, the portfolio keeps compounding and receiving distributions after contributions stop — you&rsquo;re just not adding new money. Evaluate earlier to check progress partway through the contribution period.
+          </p>
           <NumberField
             label="Inflation, annual (%, for the real-value figures)"
             value={inflationPct}
@@ -317,7 +330,7 @@ export function ReitPortfolioBuilder() {
       {result && (
         <section className="flex flex-col gap-8" aria-label="REIT portfolio result">
           <div>
-            <p className="text-sm text-ink-muted">Portfolio value at the end of year {years}</p>
+            <p className="text-sm text-ink-muted">Portfolio value at the end of year {evaluationYears}</p>
             <Amount value={result.finalValue} compact={false} className="font-serif-heading text-4xl text-rust" />
             <p className="mt-1 text-sm text-ink-muted">
               ≈ <Amount value={realFinalValue} compact={false} className="text-ink-muted" /> in today&rsquo;s rupees, at {inflationPct}% assumed inflation
@@ -325,7 +338,7 @@ export function ReitPortfolioBuilder() {
           </div>
 
           <Callout tone="positive">
-            At year {years}, this portfolio is distributing about{' '}
+            At year {evaluationYears}, this portfolio is distributing about{' '}
             <Amount value={result.monthlyIncomeAtHorizonNominal} compact={false} className="font-medium text-ink" /> a month — the rental-yield
             equivalent this tool is built to surface, the same way a rent cheque would read. In today&rsquo;s rupees, that&rsquo;s about{' '}
             <Amount value={monthlyIncomeAtHorizonReal} compact={false} className="font-medium text-ink" /> a month.
@@ -370,14 +383,19 @@ export function ReitPortfolioBuilder() {
             <p className="mb-3 text-sm text-ink">Invested vs. portfolio value over time, with annual distributions</p>
             <GrowthWithIncomeChart
               data={[...result.yearlyRows]}
-              ariaLabel="Cumulative amount invested versus the blended REIT portfolio's value, year by year, with that year's own gross distributions as bars on a secondary axis"
+              ariaLabel={
+                contributionYears < evaluationYears
+                  ? `Cumulative amount invested versus the blended REIT portfolio's value, year by year, with that year's own gross distributions as bars on a secondary axis; contributions stop after year ${contributionYears} but the portfolio keeps compounding and receiving distributions through year ${evaluationYears}`
+                  : "Cumulative amount invested versus the blended REIT portfolio's value, year by year, with that year's own gross distributions as bars on a secondary axis"
+              }
+              {...(contributionYears < evaluationYears ? { contributionEndYear: contributionYears } : {})}
             />
           </div>
 
           <div>
             <p className="mb-3 text-sm text-ink">What REIT payouts have actually looked like, point in time</p>
             <p className="mb-3 text-xs text-ink-muted">
-              Each selected REIT&rsquo;s own actual disclosed distributions, at their own reporting dates — indexed to 100 at that REIT&rsquo;s own payout on or after 1 April 2026 (start of FY2026-27), so REITs at very different unit prices sit on one comparable scale. Shown as one small panel per REIT, sharing a common date axis but each scaled to its own range, so smaller moves stay readable. Each dot is one real disclosed payout; hover it for the per-unit payout, unit price, gross and post-tax yield, and the interest/dividend/rental/return-of-capital split. Drag the strip under the panels to pan across the full 2019–2026 history, or resize it to zoom in or out — all panels move together.
+              Each selected REIT&rsquo;s own actual disclosed distributions, at their own reporting dates, plotted as effective post-tax yield % — already comparable across REITs regardless of unit price, so nothing needs indexing to a common base. Shown as one small panel per REIT, sharing a common date axis but each scaled to its own range, so smaller moves stay readable. Each dot is one real disclosed payout; hover it for the per-unit payout, unit price, gross yield, the interest/dividend/rental/return-of-capital split, and the effective post-tax yield plotted here. Drag the strip under the panels to pan across the full 2019–2026 history, or resize it to zoom in or out — all panels move together.
             </p>
             <fieldset className="mb-3 flex flex-wrap gap-3">
               <legend className="sr-only">Choose which REITs to show</legend>
@@ -393,7 +411,7 @@ export function ReitPortfolioBuilder() {
               key={selectedReitIds.join(',')}
               data={indexedData}
               series={indexedSeries}
-              ariaLabel="Each selected REIT's own actual dividend payouts at their real disclosure dates, indexed to 100 at that REIT's own payout on or after 1 April 2026, shown as one small panel per REIT sharing a common x-axis, each with its own y-axis range, with a dot at each real payout date; hover a dot for the per-unit payout, unit price, gross and post-tax yield, and the interest/dividend/rental/return-of-capital split"
+              ariaLabel="Each selected REIT's own effective post-tax yield at their real disclosure dates, shown as one small panel per REIT sharing a common x-axis, each with its own y-axis range, with a dot at each real payout date; hover a dot for the per-unit payout, unit price, gross yield, the interest/dividend/rental/return-of-capital split, and the effective post-tax yield"
             />
           </div>
         </section>

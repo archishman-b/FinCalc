@@ -245,7 +245,22 @@ function round3(v: number): number {
 export interface ReitPortfolioInput {
   lumpsum: number;
   monthlySip: number;
+  /** Total months to project every leg forward — the evaluation horizon. NAV growth and distributions are simulated through this full length regardless of contributionMonths. */
   months: number;
+  /**
+   * Months during which the lumpsum + monthly SIP are actually contributed.
+   * May be shorter than `months` — contributions stop, but each leg's NAV
+   * keeps compounding and keeps paying distributions on what's already
+   * invested, the same as a real REIT holding after you stop adding new
+   * money (the ask behind letting contribution and evaluation horizons
+   * differ: "I contribute for 15 years, but want to check the value in
+   * year 20"). May also exceed `months` (an interim check partway through
+   * an ongoing SIP) — `months` already caps how far anything is actually
+   * simulated, so a contributionMonths beyond it is simply never reached.
+   * Defaults to `months` (contribute for the whole horizon — prior
+   * behaviour) when omitted.
+   */
+  contributionMonths?: number;
   weights: Record<ReitId, number>;
   assumptions: Record<ReitId, ReitAssumption>;
   componentSplits?: Partial<Record<ReitId, ReitComponentSplit>>;
@@ -286,6 +301,7 @@ export function buildReitPortfolio(input: ReitPortfolioInput): ReitPortfolioResu
   }
   const distributionRules = resolveDistributionRules();
   const history = getReitDistributionHistory();
+  const contributionMonths = input.contributionMonths ?? input.months;
 
   const seriesRates = new Map<SeriesId, number>();
   const legs: ReitPortfolioLeg[] = REIT_IDS.map((reitId) => {
@@ -301,7 +317,7 @@ export function buildReitPortfolio(input: ReitPortfolioInput): ReitPortfolioResu
 
     const position = reitPosition(reitId, {
       initialInvestment: allocatedLumpsum,
-      ...(allocatedMonthlySip > 0 ? { monthlyContribution: () => allocatedMonthlySip } : {}),
+      ...(allocatedMonthlySip > 0 ? { monthlyContribution: (month: number) => (month <= contributionMonths ? allocatedMonthlySip : 0) } : {}),
       navGrowthSeries: navSeries,
       distributionYieldSeries: yieldSeries,
       componentSplit: input.componentSplits?.[reitId] ?? defaultComponentSplit(reitId, history),
