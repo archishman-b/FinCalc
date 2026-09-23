@@ -3,6 +3,7 @@ import {
   AreaChart,
   Bar,
   BarChart,
+  Brush,
   CartesianGrid,
   Cell,
   Legend,
@@ -275,22 +276,57 @@ export function GrowthWithIncomeChart({
   );
 }
 
+/** Parses an ISO date ("2026-05-04") into a short display label ("4 May 26"), for axis ticks and tooltips. */
+function formatShortDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(y!, m! - 1, d!));
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit', timeZone: 'UTC' });
+}
+
 /**
- * Quarter-by-quarter view of what the blended portfolio's dividend payouts
- * have actually looked like, built from each REIT's own disclosed
- * distribution record (reit-portfolio.ts's historicalDistributionSeries) —
- * not a simulated forward projection. Split into the same four components
- * BreakdownBarChart's full-horizon version showed (interest/dividend/
- * rental/return-of-capital), stacked bar-by-bar per actual calendar
- * quarter, so the real lumpiness of REIT payouts (quarterly, uneven
- * amounts) is visible rather than smoothed away. The post-tax annualised
- * yield — each REIT's own disclosed effectivePostTaxYieldPct, blended by
- * weight — is overlaid as a line on a secondary axis, the same dual-axis
- * shape AmortizationChart and GrowthWithIncomeChart use. X-axis ticks thin
- * themselves (`tickInterval` scales with the data length) since the full
- * history runs to ~29 quarters across the 5 REITs' different listing
- * dates.
+ * A fixed pixel width for each REIT's stacked bar in ReitIndexedPayoutChart.
+ * Left unset, Recharts divides each category's band evenly across every
+ * REIT group declared in the chart — even a category where only one REIT
+ * actually disclosed that day still has its bar squeezed down to
+ * (band width / REITs selected), which is what turned 5-REIT columns into
+ * unreadable slivers. A fixed size keeps every REIT's column legible
+ * regardless of selection count; defaultBrushStartIndex's row cap is what
+ * keeps that many fixed-width columns from overflowing the chart.
  */
+const REIT_BAR_SIZE = 10;
+
+/**
+ * The array index the Brush should default to, so the chart opens on
+ * roughly the last year of history rather than the full multi-year span —
+ * mirroring the point-in-time Brush's "show 1 year at a time, then pan/zoom
+ * for more" ask.
+ *
+ * With several REITs selected at once, though, a full calendar year of
+ * *combined* disclosure dates can pack in far more columns than a bar chart
+ * renders legibly: each additional REIT both adds columns (its own
+ * disclosure dates) and shrinks every column (Recharts divides each
+ * category's width across all selected REITs' stacked groups, whether or
+ * not a given REIT actually disclosed on that exact date) — the two effects
+ * compound, which is what turned the "Return of capital" segments into a
+ * near-continuous smear with all 5 REITs selected. So this also caps the
+ * default window to the most recent `maxVisibleRows` rows and takes
+ * whichever of the two candidate windows is narrower. A 1-2 REIT selection
+ * never has enough rows in a year to hit that cap and still opens on the
+ * full last-12-months view unchanged; a busy 4-5 REIT selection opens
+ * tighter by default, and the Brush remains free to widen back out.
+ */
+function defaultBrushStartIndex(data: readonly { date: string }[], maxVisibleRows = 8): number {
+  if (data.length === 0) return 0;
+  const last = new Date(`${data[data.length - 1]!.date}T00:00:00Z`);
+  const cutoff = new Date(last);
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 1);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const idxByDate = data.findIndex((row) => row.date >= cutoffIso);
+  const startByDate = idxByDate === -1 ? 0 : idxByDate;
+  const startByCount = Math.max(0, data.length - maxVisibleRows);
+  return Math.max(startByDate, startByCount);
+}
+
 /**
  * Recharts' auto-generated `<Legend>` for a stacked-bar-plus-line
  * ComposedChart doesn't preserve JSX declaration order (confirmed against
@@ -322,35 +358,67 @@ function renderFixedLegend(items: { value: string; type: 'square' | 'line'; colo
   );
 }
 
-export function HistoricalDistributionChart({
+/**
+ * Point-in-time view of what one or more REITs' dividend payouts have
+ * actually looked like — one stacked column per REIT per actual
+ * disclosure date (interest/dividend/rental/return-of-capital, the same
+ * four-color scheme every other chart here uses), not bucketed or
+ * blended together. Each REIT gets its own `stackId` (its dataKeys are
+ * `${reitId}_interest` etc.) so two REITs never sum into one bar even if
+ * their dates happened to coincide — in practice they sit at their own
+ * distinct positions along one shared date axis. The four component
+ * colors stay constant across REITs (position and the tooltip carry
+ * which REIT a given column belongs to); the post-tax yield line for
+ * each selected REIT, though, needs its own color, since multiple yield
+ * lines can overlay directly — `series[].color` supplies that (and
+ * drives the legend's per-REIT line entries).
+ *
+ * A Brush (Recharts' built-in pan/zoom scrollbar) sits under the chart,
+ * defaulting to roughly the most recent year of the visible REITs' data,
+ * clamped tighter when several REITs are selected at once so the default
+ * view stays legible (defaultBrushStartIndex) — dragging its handles
+ * narrows or widens the window, dragging the window itself pans across the
+ * full listed history, satisfying "show 1 year at a time... slider to zoom
+ * in & out and navigate across."
+ */
+export function ReitIndexedPayoutChart({
   data,
+  series,
   ariaLabel,
 }: {
-  data: { quarterKey: string; quarterLabel: string; interest: number; dividend: number; rental: number; returnOfCapital: number; postTaxYieldPct: number }[];
+  data: readonly Record<string, number | string>[];
+  series: readonly { reitId: string; label: string; color: string }[];
   ariaLabel: string;
 }) {
   const palette = usePalette();
-  // ~29 quarters across the full history — thin to roughly one label per year (every 4th quarter) rather than every quarter.
-  const tickInterval = Math.max(0, Math.round(data.length / 8) - 1);
+  if (data.length === 0 || series.length === 0) {
+    return <p className="text-sm text-ink-muted">Select at least one REIT above to see its payout history.</p>;
+  }
+  const brushStart = defaultBrushStartIndex(data as { date: string }[]);
   return (
-    <div className="h-72 w-full" role="img" aria-label={ariaLabel}>
+    <div className="h-[26rem] w-full" role="img" aria-label={ariaLabel}>
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <ComposedChart
+          data={data as Record<string, number | string>[]}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+          barCategoryGap="16%"
+          barGap={2}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke={palette.hairline} vertical={false} />
           <XAxis
-            dataKey="quarterLabel"
-            interval={tickInterval}
+            dataKey="date"
+            tickFormatter={(v: string) => formatShortDate(v)}
             tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
             axisLine={{ stroke: palette.hairline }}
             tickLine={false}
           />
           <YAxis
-            yAxisId="amount"
-            tickFormatter={(v: number) => formatINR(v, { compact: true, decimals: 0 })}
+            yAxisId="index"
+            tickFormatter={(v: number) => v.toFixed(0)}
             tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
             axisLine={false}
             tickLine={false}
-            width={64}
+            width={44}
           />
           <YAxis
             yAxisId="yieldPct"
@@ -362,7 +430,8 @@ export function HistoricalDistributionChart({
             width={48}
           />
           <Tooltip
-            formatter={(v, name) => (name === 'Post-tax yield (annualised)' ? [`${Number(v).toFixed(2)}%`, name] : [formatINR(Number(v), { compact: true }), name])}
+            labelFormatter={(v) => formatShortDate(String(v))}
+            formatter={(v, name) => (String(name).includes('yield') ? [`${Number(v).toFixed(2)}%`, name] : [Number(v).toFixed(1), name])}
             contentStyle={{
               fontFamily: 'ui-monospace, monospace',
               fontSize: 13,
@@ -380,25 +449,51 @@ export function HistoricalDistributionChart({
                   { value: 'Dividend', type: 'square', color: palette.moss },
                   { value: 'Rental', type: 'square', color: palette.ochre },
                   { value: 'Return of capital', type: 'square', color: palette.ink },
-                  { value: 'Post-tax yield (annualised)', type: 'line', color: palette.inkMuted },
+                  ...series.map((s) => ({ value: `${s.label} yield`, type: 'line' as const, color: s.color })),
                 ],
                 palette.ink,
               )
             }
           />
-          <Bar isAnimationActive={false} yAxisId="amount" dataKey="interest" name="Interest" stackId="dist" fill={palette.rust} />
-          <Bar isAnimationActive={false} yAxisId="amount" dataKey="dividend" name="Dividend" stackId="dist" fill={palette.moss} />
-          <Bar isAnimationActive={false} yAxisId="amount" dataKey="rental" name="Rental" stackId="dist" fill={palette.ochre} />
-          <Bar isAnimationActive={false} yAxisId="amount" dataKey="returnOfCapital" name="Return of capital" stackId="dist" fill={palette.ink} radius={[2, 2, 0, 0]} />
-          <Line
-            isAnimationActive={false}
-            yAxisId="yieldPct"
-            type="monotone"
-            dataKey="postTaxYieldPct"
-            name="Post-tax yield (annualised)"
-            stroke={palette.inkMuted}
-            strokeWidth={2}
-            dot={false}
+          {series.flatMap((s) => [
+            <Bar key={`${s.reitId}-interest`} isAnimationActive={false} yAxisId="index" dataKey={`${s.reitId}_interest`} name={`${s.label} · Interest`} stackId={s.reitId} fill={palette.rust} barSize={REIT_BAR_SIZE} />,
+            <Bar key={`${s.reitId}-dividend`} isAnimationActive={false} yAxisId="index" dataKey={`${s.reitId}_dividend`} name={`${s.label} · Dividend`} stackId={s.reitId} fill={palette.moss} barSize={REIT_BAR_SIZE} />,
+            <Bar key={`${s.reitId}-rental`} isAnimationActive={false} yAxisId="index" dataKey={`${s.reitId}_rental`} name={`${s.label} · Rental`} stackId={s.reitId} fill={palette.ochre} barSize={REIT_BAR_SIZE} />,
+            <Bar
+              key={`${s.reitId}-returnOfCapital`}
+              isAnimationActive={false}
+              yAxisId="index"
+              dataKey={`${s.reitId}_returnOfCapital`}
+              name={`${s.label} · Return of capital`}
+              stackId={s.reitId}
+              fill={palette.ink}
+              radius={[2, 2, 0, 0]}
+              barSize={REIT_BAR_SIZE}
+            />,
+          ])}
+          {series.map((s) => (
+            <Line
+              key={`${s.reitId}-yield`}
+              isAnimationActive={false}
+              yAxisId="yieldPct"
+              type="monotone"
+              dataKey={`${s.reitId}_yieldPct`}
+              name={`${s.label} yield`}
+              stroke={s.color}
+              strokeWidth={2}
+              dot={false}
+              connectNulls
+            />
+          ))}
+          <Brush
+            dataKey="date"
+            height={22}
+            travellerWidth={8}
+            startIndex={brushStart}
+            endIndex={data.length - 1}
+            stroke={palette.rust}
+            fill={palette.paper}
+            tickFormatter={(v: string) => formatShortDate(v)}
           />
         </ComposedChart>
       </ResponsiveContainer>

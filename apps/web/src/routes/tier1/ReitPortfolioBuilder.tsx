@@ -7,7 +7,9 @@ import {
   buildReitPortfolio,
   defaultAssumptions,
   equalWeights,
+  reitIndexedDistributionSeries,
   REIT_DISPLAY,
+  REIT_IDS,
   sumWeights,
   weightsAreValid,
   type ReitAssumption,
@@ -16,7 +18,7 @@ import {
 import { usePalette } from '../../lib/theme';
 import { Amount } from '../../components/Amount';
 import { CalcShell, Callout, NumberField, SubmitButton } from '../../components/CalcShell';
-import { GrowthWithIncomeChart, HistoricalDistributionChart } from '../../components/charts';
+import { GrowthWithIncomeChart, ReitIndexedPayoutChart } from '../../components/charts';
 
 /**
  * Tier-line module (added Sept 2026, alongside the home-page re-theme):
@@ -89,6 +91,7 @@ export function ReitPortfolioBuilder() {
   const [assumptions, setAssumptions] = useState<Record<ReitId, ReitAssumption>>(defaultAssumptions);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedReitIds, setSelectedReitIds] = useState<ReitId[]>(() => [...REIT_IDS]);
 
   const weightTotal = sumWeights(weights);
   const weightsOk = weightsAreValid(weights);
@@ -118,6 +121,16 @@ export function ReitPortfolioBuilder() {
 
   const historicalInstruments = getReitInstruments();
   const historicalAsOf = getReitInstrumentsAsOf();
+
+  // Independent of the submitted portfolio — driven only by which REIT(s) are checked below the chart, since this is a point-in-time look at each REIT's own actual disclosed history, not a blend of the form's weights.
+  const indexedData = useMemo(() => reitIndexedDistributionSeries(selectedReitIds), [selectedReitIds]);
+  const indexedSeries = useMemo(
+    () => REIT_DISPLAY.filter((r) => selectedReitIds.includes(r.id)).map((r) => ({ reitId: r.id, label: r.shortLabel, color: palette[r.colorKey] })),
+    [selectedReitIds, palette],
+  );
+  function toggleReit(id: ReitId) {
+    setSelectedReitIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   return (
     <CalcShell
@@ -362,13 +375,24 @@ export function ReitPortfolioBuilder() {
           </div>
 
           <div>
-            <p className="mb-3 text-sm text-ink">What REIT payouts have actually looked like, quarter by quarter</p>
+            <p className="mb-3 text-sm text-ink">What REIT payouts have actually looked like, point in time</p>
             <p className="mb-3 text-xs text-ink-muted">
-              Built from each REIT&rsquo;s own disclosed distribution record, not a projection — scaled to your total invested amount at your chosen weights. A REIT contributes nothing to a quarter before it existed.
+              Each selected REIT&rsquo;s own actual disclosed distributions, at their own reporting dates — indexed to 100 at that REIT&rsquo;s own payout on or after 1 April 2026 (start of FY2026-27), so REITs at very different unit prices sit on one comparable scale. The post-tax yield line is a plain %, not indexed. Drag the strip under the chart to pan across the full 2019–2026 history, or resize it to zoom in or out.
             </p>
-            <HistoricalDistributionChart
-              data={[...result.historicalDistributionRows]}
-              ariaLabel="Actual historical dividend payouts, quarter by quarter, split into interest, dividend, rental and return-of-capital components at your chosen weights and invested amount, with the blended post-tax annualised yield overlaid as a line"
+            <fieldset className="mb-3 flex flex-wrap gap-3">
+              <legend className="sr-only">Choose which REITs to show</legend>
+              {REIT_DISPLAY.map((r) => (
+                <label key={r.id} className="flex items-center gap-1.5 text-xs text-ink">
+                  <input type="checkbox" checked={selectedReitIds.includes(r.id)} onChange={() => toggleReit(r.id)} />
+                  <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: palette[r.colorKey] }} />
+                  {r.shortLabel}
+                </label>
+              ))}
+            </fieldset>
+            <ReitIndexedPayoutChart
+              data={indexedData}
+              series={indexedSeries}
+              ariaLabel="Each selected REIT's own actual dividend payouts at their real disclosure dates, indexed to 100 at that REIT's own payout on or after 1 April 2026, split into interest, dividend, rental and return-of-capital components, with each REIT's own post-tax annualised yield overlaid as a line"
             />
           </div>
         </section>
