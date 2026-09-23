@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import {
   Area,
   AreaChart,
@@ -303,68 +305,65 @@ function defaultBrushStartIndex(data: readonly { date: string }[]): number {
   return idx === -1 ? 0 : idx;
 }
 
-/**
- * Recharts' auto-generated `<Legend>` for a stacked-bar-plus-line
- * ComposedChart doesn't preserve JSX declaration order (confirmed against
- * AmortizationChart's already-shipped 2-bar-plus-line chart, which has the
- * same scramble) — with 5 series here rather than 3, that's confusing
- * enough to warrant a fixed rendering order. The library's own `payload`
- * override prop for this exists at runtime but isn't in this version's
- * type declarations (`Omit<Props, ... | 'payload' | ...>`), so this
- * renders the legend itself via the documented `content` render-prop
- * instead, matching LEGEND_STYLE.
- */
-function renderFixedLegend(items: { value: string; type: 'square' | 'line'; color: string }[], ink: string) {
-  return (
-    <ul className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 pt-2" style={{ ...LEGEND_STYLE, color: ink }}>
-      {items.map((item) => (
-        <li key={item.value} className="flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            style={
-              item.type === 'line'
-                ? { display: 'inline-block', width: 12, height: 2, background: item.color }
-                : { display: 'inline-block', width: 10, height: 10, background: item.color }
-            }
-          />
-          {item.value}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 /** Reads a numeric field off a ReitIndexedDistributionRow, defaulting to 0 — used in ReitIndexedPayoutChart's tooltip, where every field beyond `date` is typed loosely as `number | string`. */
 function num(v: number | string | undefined): number {
   return typeof v === 'number' ? v : 0;
 }
 
 /**
+ * A padded [min, max] y-domain for one REIT's indexed values within a
+ * visible row slice — each panel in ReitIndexedPayoutChart's small
+ * multiples gets its own range computed this way (e.g. ~80–105) instead of
+ * every REIT sharing one 0–120ish scale, so a REIT whose payouts barely
+ * move isn't rendered as a near-flat line just because another REIT in the
+ * same selection swings much wider. Recomputed whenever the visible window
+ * (the Brush range) changes, so zooming in tightens the range further.
+ * Falls back to a fixed band when the REIT has no visible values, so the
+ * panel still renders a sane axis rather than a degenerate [0, 0].
+ */
+function reitYDomain(rows: readonly Record<string, number | string>[], reitId: string): [number, number] {
+  const values = rows.map((r) => r[`${reitId}_indexed`]).filter((v): v is number => typeof v === 'number');
+  if (values.length === 0) return [90, 110];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (min === max) return [min - 5, max + 5];
+  const pad = Math.max((max - min) * 0.15, 1);
+  return [Math.floor(min - pad), Math.ceil(max + pad)];
+}
+
+/** Fixed per-panel geometry in ReitIndexedPayoutChart's small multiples — the same margin and y-axis width on every panel keep their plot areas pixel-aligned, so a given date lines up vertically across panels even though each is its own independent Recharts instance. */
+const REIT_PANEL_MARGIN = { top: 4, right: 8, left: 0, bottom: 0 };
+const REIT_PANEL_Y_AXIS_WIDTH = 42;
+
+/**
  * Point-in-time view of what one or more REITs' dividend payouts have
- * actually looked like: one line per REIT, indexed to 100 at that REIT's
- * own FY2026-27 base record (see reitIndexedDistributionSeries), with a
- * dot at every date that REIT actually disclosed a distribution —
- * `connectNulls` draws a plain visual connector across the other REITs'
- * rows in between, not a real value. Each REIT gets its own `series[].color`
- * (drives both the line/dots and the legend).
+ * actually looked like: a stack of small-multiple panels, one per REIT,
+ * each its own line (indexed to 100 at that REIT's own FY2026-27 base
+ * record — see reitIndexedDistributionSeries) with a dot at every date
+ * that REIT actually disclosed a distribution. `connectNulls` draws a
+ * plain visual connector across the other REITs' rows in between, not a
+ * real value.
  *
- * An earlier revision rendered these same point-in-time payouts as stacked
- * bars, but with several REITs' worth of disclosure dates sharing one axis,
- * Recharts had to shrink every bar's width per REIT selected — no amount
- * of retuning the default window or an explicit bar size kept a 5-REIT
- * selection legible. A line-plus-dot rendering has no such failure mode at
- * any REIT count, which is why this replaces the bars outright. All the
- * detail that used to be visible as stacked bar segments — the four-
- * component rupee split, the actual per-unit payout and price, both yield
- * %s (gross and effective post-tax) — now lives in the hover tooltip for
- * that REIT's dot instead, per explicit user ask, rather than being
- * visually stacked.
+ * Two earlier revisions put every REIT on one shared chart — first as
+ * stacked bars (Recharts had to shrink every bar's width per REIT
+ * selected, no amount of retuning the default window or an explicit bar
+ * size kept a 5-REIT selection legible), then as overlaid lines on one
+ * shared y-axis (legible, but a REIT with a narrow payout range still got
+ * visually flattened by sharing a ~0–120 scale with a REIT that swings
+ * wider). Per explicit user ask, this splits each REIT into its own panel
+ * with its own y-axis domain (reitYDomain — e.g. ~80–105, not 0–120 for
+ * every REIT), sharing one x-axis: only the bottom panel draws date ticks,
+ * and the other panels' plot areas are pixel-aligned to it (same margin,
+ * same fixed y-axis width) so a given date still lines up vertically
+ * across panels.
  *
- * A Brush (Recharts' built-in pan/zoom scrollbar) sits under the chart,
- * defaulting to the trailing ~12 months of history (defaultBrushStartIndex)
- * — dragging its handles narrows or widens the window, dragging the window
- * itself pans across the full listed history, satisfying "show 1 year at a
- * time... slider to zoom in & out and navigate across."
+ * A single Brush (Recharts' built-in pan/zoom scrollbar) sits under the
+ * bottom panel only — its range is lifted into this component's own state
+ * and applied to every panel's data (the bottom panel gets the Brush's
+ * usual auto-windowing; the other panels are handed the pre-sliced visible
+ * rows directly, since they have no Brush of their own to do that
+ * windowing), so dragging it pans/zooms all 5 panels together. It defaults
+ * to the trailing ~12 months of history (defaultBrushStartIndex).
  */
 export function ReitIndexedPayoutChart({
   data,
@@ -376,107 +375,121 @@ export function ReitIndexedPayoutChart({
   ariaLabel: string;
 }) {
   const palette = usePalette();
-  if (data.length === 0 || series.length === 0) {
+  const rows = data as Record<string, number | string>[];
+  const [range, setRange] = useState(() => ({
+    start: defaultBrushStartIndex(rows as { date: string }[]),
+    end: Math.max(0, rows.length - 1),
+  }));
+
+  if (rows.length === 0 || series.length === 0) {
     return <p className="text-sm text-ink-muted">Select at least one REIT above to see its payout history.</p>;
   }
-  const brushStart = defaultBrushStartIndex(data as { date: string }[]);
+
+  const visible = rows.slice(range.start, range.end + 1);
+
   return (
-    <div className="h-[26rem] w-full" role="img" aria-label={ariaLabel}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data as Record<string, number | string>[]} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={palette.hairline} vertical={false} />
-          <XAxis
-            dataKey="date"
-            tickFormatter={(v: string) => formatShortDate(v)}
-            tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
-            axisLine={{ stroke: palette.hairline }}
-            tickLine={false}
-          />
-          <YAxis
-            yAxisId="index"
-            tickFormatter={(v: number) => v.toFixed(0)}
-            tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
-            axisLine={false}
-            tickLine={false}
-            width={44}
-          />
-          <Tooltip
-            content={({ active, payload }) => {
-              if (!active || !payload || payload.length === 0) return null;
-              const points = payload
-                .map((p) => {
-                  const key = String(p.dataKey ?? '');
-                  const reitId = key.endsWith('_indexed') ? key.slice(0, -'_indexed'.length) : '';
-                  const s = series.find((x) => x.reitId === reitId);
-                  const row = p.payload as Record<string, number | string> | undefined;
-                  if (!s || !row || typeof row[`${reitId}_indexed`] !== 'number') return null;
-                  return { s, row, reitId };
-                })
-                .filter((x): x is { s: (typeof series)[number]; row: Record<string, number | string>; reitId: string } => x !== null);
-              if (points.length === 0) return null;
-              return (
-                <div
-                  style={{
-                    fontFamily: 'ui-monospace, monospace',
-                    fontSize: 12.5,
-                    lineHeight: 1.5,
-                    background: palette.paper,
-                    border: `1px solid ${palette.hairline}`,
-                    borderRadius: 4,
-                    color: palette.ink,
-                    padding: '8px 10px',
-                    maxWidth: 300,
-                  }}
-                >
-                  {points.map(({ s, row, reitId }) => (
-                    <div key={reitId} style={{ marginBottom: 4 }}>
-                      <div style={{ fontWeight: 600, color: s.color }}>
-                        {s.label} · {formatShortDate(String(row.date))}
-                      </div>
-                      <div>1. Payout per share: {formatINR(num(row[`${reitId}_totalDpuInr`]), { decimals: 2 })}</div>
-                      <div>2. Share price: {formatINR(num(row[`${reitId}_priceInr`]), { decimals: 2 })}</div>
-                      <div>3. Yield % (absolute): {num(row[`${reitId}_grossYieldPct`]).toFixed(2)}%</div>
-                      <div>
-                        4. Split of payout: Interest {formatINR(num(row[`${reitId}_interestInr`]), { decimals: 2 })} · Dividend{' '}
-                        {formatINR(num(row[`${reitId}_dividendInr`]), { decimals: 2 })} · Rental{' '}
-                        {formatINR(num(row[`${reitId}_rentalInr`]), { decimals: 2 })} · Return of capital{' '}
-                        {formatINR(num(row[`${reitId}_returnOfCapitalInr`]), { decimals: 2 })}
-                      </div>
-                      <div>5. Yield % (effective, after tax): {num(row[`${reitId}_postTaxYieldPct`]).toFixed(2)}%</div>
-                    </div>
-                  ))}
-                </div>
-              );
-            }}
-          />
-          <Legend content={() => renderFixedLegend(series.map((s) => ({ value: s.label, type: 'line' as const, color: s.color })), palette.ink)} />
-          {series.map((s) => (
-            <Line
-              key={s.reitId}
-              isAnimationActive={false}
-              yAxisId="index"
-              type="monotone"
-              dataKey={`${s.reitId}_indexed`}
-              name={s.label}
-              stroke={s.color}
-              strokeWidth={2.5}
-              dot={{ r: 3.5, strokeWidth: 0, fill: s.color }}
-              activeDot={{ r: 5.5 }}
-              connectNulls
-            />
-          ))}
-          <Brush
-            dataKey="date"
-            height={22}
-            travellerWidth={8}
-            startIndex={brushStart}
-            endIndex={data.length - 1}
-            stroke={palette.rust}
-            fill={palette.paper}
-            tickFormatter={(v: string) => formatShortDate(v)}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
+    <div role="img" aria-label={ariaLabel}>
+      {series.map((s, i) => {
+        const isLast = i === series.length - 1;
+        const domain = reitYDomain(visible, s.reitId);
+        return (
+          <div key={s.reitId} className="mb-1">
+            <div className="mb-0.5 flex items-center gap-1.5 text-xs" style={{ color: palette.inkMuted }}>
+              <span aria-hidden="true" className="inline-block h-2 w-2 rounded-full" style={{ background: s.color }} />
+              {s.label}
+            </div>
+            <div style={{ height: isLast ? 96 : 68 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={isLast ? rows : visible} margin={REIT_PANEL_MARGIN}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={palette.hairline} vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    hide={!isLast}
+                    tickFormatter={(v: string) => formatShortDate(v)}
+                    tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
+                    axisLine={{ stroke: palette.hairline }}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                    minTickGap={28}
+                  />
+                  <YAxis
+                    domain={domain}
+                    tickCount={3}
+                    tickFormatter={(v: number) => v.toFixed(0)}
+                    tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={REIT_PANEL_Y_AXIS_WIDTH}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload || payload.length === 0) return null;
+                      const row = payload[0]?.payload as Record<string, number | string> | undefined;
+                      if (!row || typeof row[`${s.reitId}_indexed`] !== 'number') return null;
+                      return (
+                        <div
+                          style={{
+                            fontFamily: 'ui-monospace, monospace',
+                            fontSize: 12.5,
+                            lineHeight: 1.5,
+                            background: palette.paper,
+                            border: `1px solid ${palette.hairline}`,
+                            borderRadius: 4,
+                            color: palette.ink,
+                            padding: '8px 10px',
+                            maxWidth: 300,
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, color: s.color }}>
+                            {s.label} · {formatShortDate(String(row.date))}
+                          </div>
+                          <div>1. Payout per share: {formatINR(num(row[`${s.reitId}_totalDpuInr`]), { decimals: 2 })}</div>
+                          <div>2. Share price: {formatINR(num(row[`${s.reitId}_priceInr`]), { decimals: 2 })}</div>
+                          <div>3. Yield % (absolute): {num(row[`${s.reitId}_grossYieldPct`]).toFixed(2)}%</div>
+                          <div>
+                            4. Split of payout: Interest {formatINR(num(row[`${s.reitId}_interestInr`]), { decimals: 2 })} · Dividend{' '}
+                            {formatINR(num(row[`${s.reitId}_dividendInr`]), { decimals: 2 })} · Rental{' '}
+                            {formatINR(num(row[`${s.reitId}_rentalInr`]), { decimals: 2 })} · Return of capital{' '}
+                            {formatINR(num(row[`${s.reitId}_returnOfCapitalInr`]), { decimals: 2 })}
+                          </div>
+                          <div>5. Yield % (effective, after tax): {num(row[`${s.reitId}_postTaxYieldPct`]).toFixed(2)}%</div>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Line
+                    isAnimationActive={false}
+                    type="monotone"
+                    dataKey={`${s.reitId}_indexed`}
+                    stroke={s.color}
+                    strokeWidth={2.5}
+                    dot={{ r: 3, strokeWidth: 0, fill: s.color }}
+                    activeDot={{ r: 5 }}
+                    connectNulls
+                  />
+                  {isLast && (
+                    <Brush
+                      dataKey="date"
+                      height={22}
+                      travellerWidth={8}
+                      startIndex={range.start}
+                      endIndex={range.end}
+                      stroke={palette.rust}
+                      fill={palette.paper}
+                      tickFormatter={(v: string) => formatShortDate(v)}
+                      onChange={(r: { startIndex?: number; endIndex?: number }) => {
+                        if (typeof r.startIndex === 'number' && typeof r.endIndex === 'number') {
+                          setRange({ start: r.startIndex, end: r.endIndex });
+                        }
+                      }}
+                    />
+                  )}
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

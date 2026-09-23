@@ -377,7 +377,7 @@ export function ReitPortfolioBuilder() {
           <div>
             <p className="mb-3 text-sm text-ink">What REIT payouts have actually looked like, point in time</p>
             <p className="mb-3 text-xs text-ink-muted">
-              Each selected REIT&rsquo;s own actual disclosed distributions, at their own reporting dates — indexed to 100 at that REIT&rsquo;s own payout on or after 1 April 2026 (start of FY2026-27), so REITs at very different unit prices sit on one comparable scale. Each dot is one real disclosed payout; hover it for the per-unit payout, unit price, gross and post-tax yield, and the interest/dividend/rental/return-of-capital split. Drag the strip under the chart to pan across the full 2019–2026 history, or resize it to zoom in or out.
+              Each selected REIT&rsquo;s own actual disclosed distributions, at their own reporting dates — indexed to 100 at that REIT&rsquo;s own payout on or after 1 April 2026 (start of FY2026-27), so REITs at very different unit prices sit on one comparable scale. Shown as one small panel per REIT, sharing a common date axis but each scaled to its own range, so smaller moves stay readable. Each dot is one real disclosed payout; hover it for the per-unit payout, unit price, gross and post-tax yield, and the interest/dividend/rental/return-of-capital split. Drag the strip under the panels to pan across the full 2019–2026 history, or resize it to zoom in or out — all panels move together.
             </p>
             <fieldset className="mb-3 flex flex-wrap gap-3">
               <legend className="sr-only">Choose which REITs to show</legend>
@@ -390,9 +390,10 @@ export function ReitPortfolioBuilder() {
               ))}
             </fieldset>
             <ReitIndexedPayoutChart
+              key={selectedReitIds.join(',')}
               data={indexedData}
               series={indexedSeries}
-              ariaLabel="Each selected REIT's own actual dividend payouts at their real disclosure dates, indexed to 100 at that REIT's own payout on or after 1 April 2026, one line per REIT with a dot at each real payout date; hover a dot for the per-unit payout, unit price, gross and post-tax yield, and the interest/dividend/rental/return-of-capital split"
+              ariaLabel="Each selected REIT's own actual dividend payouts at their real disclosure dates, indexed to 100 at that REIT's own payout on or after 1 April 2026, shown as one small panel per REIT sharing a common x-axis, each with its own y-axis range, with a dot at each real payout date; hover a dot for the per-unit payout, unit price, gross and post-tax yield, and the interest/dividend/rental/return-of-capital split"
             />
           </div>
         </section>
