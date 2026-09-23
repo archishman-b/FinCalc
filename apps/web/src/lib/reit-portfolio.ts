@@ -108,11 +108,29 @@ export function defaultComponentSplit(reitId: ReitId, history: readonly ReitDist
 /**
  * A "wide" row of per-REIT, point-in-time distribution data: one row per
  * actual disclosure date across the requested REITs, with per-REIT keys
- * (`${reitId}_interest`, `_dividend`, `_rental`, `_returnOfCapital`,
- * `_yieldPct`) populated only for the REIT(s) that actually disclosed a
- * distribution on that exact date. `date`/`dateLabel` are always present;
- * every other key is dynamic, so this is typed loosely rather than as a
- * fixed shape — see reitIndexedDistributionSeries()'s doc comment.
+ * populated only for the REIT(s) that actually disclosed a distribution on
+ * that exact date:
+ *   `${reitId}_indexed`            — the indexed payout level (100 at the
+ *                                     REIT's own FY2026-27 base record),
+ *                                     what the chart's line actually plots
+ *   `${reitId}_totalDpuInr`        — that payout, in rupees per unit, unindexed
+ *   `${reitId}_priceInr`           — the unit's price on the record date
+ *   `${reitId}_grossYieldPct`      — annualized gross (pre-tax) yield, %
+ *   `${reitId}_postTaxYieldPct`    — annualized effective post-tax yield, %
+ *                                     (both annualized, not the bare
+ *                                     per-quarter figure, so the two are a
+ *                                     fair pre-tax/post-tax comparison —
+ *                                     annualizedYieldPct and
+ *                                     effectivePostTaxYieldPct on the
+ *                                     underlying record are both already
+ *                                     annualized; grossQtrYieldPct is not
+ *                                     used here for that reason)
+ *   `${reitId}_interestInr` / `_dividendInr` / `_rentalInr` / `_returnOfCapitalInr`
+ *                                   — the four-component rupee breakdown of
+ *                                     that one payout (unindexed)
+ * `date` is always present; every other key is dynamic, so this is typed
+ * loosely rather than as a fixed shape — see reitIndexedDistributionSeries()'s
+ * doc comment.
  */
 export interface ReitIndexedDistributionRow {
   date: string;
@@ -131,26 +149,27 @@ const REBASE_ON_OR_AFTER = '2026-04-01';
  * payout events, at their own dates, individually — with the yield rate
  * alongside — and let the user choose which REIT(s) to look at.
  *
- * Each REIT's own four components are indexed to a common base: that
- * REIT's own total distribution-per-unit (totalDpuInr) at the first
- * record on or after REBASE_ON_OR_AFTER is set to index value 100, and
- * every other record for that REIT — before or after the base date — is
- * expressed as (that record's own component ÷ the base record's total)
- * × 100. That's what makes REITs trading at very different absolute unit
- * prices (₹110 for Knowledge Realty vs ₹400+ for Embassy) comparable on
- * one shared scale: their payout *levels relative to their own start*
- * sit together, even though their rupee amounts never would. Earlier
- * quarters typically read below 100 (REIT payouts have generally grown
- * over time) — the full listed history is indexed and returned, not just
- * the months after the base date. For all 5 shipped REITs the base
- * record lands on each one's ~May 2026 disclosure, since every REIT —
- * including Knowledge Realty, listed Aug 2025 — already has a record by
- * then; a REIT with no record on/after REBASE_ON_OR_AFTER has no defined
- * base and is skipped entirely rather than dividing by zero.
+ * A REIT's indexed level (`${reitId}_indexed`) is that record's own total
+ * distribution-per-unit (totalDpuInr) expressed against a common base:
+ * that REIT's own total DPU at the first record on or after
+ * REBASE_ON_OR_AFTER is set to index value 100, and every other record for
+ * that REIT — before or after the base date — is (that record's total ÷
+ * the base record's total) × 100. That's what makes REITs trading at very
+ * different absolute unit prices (₹110 for Knowledge Realty vs ₹400+ for
+ * Embassy) comparable on one shared scale: their payout *levels relative
+ * to their own start* sit together, even though their rupee amounts never
+ * would. Earlier quarters typically read below 100 (REIT payouts have
+ * generally grown over time) — the full listed history is indexed and
+ * returned, not just the months after the base date. For all 5 shipped
+ * REITs the base record lands on each one's ~May 2026 disclosure, since
+ * every REIT — including Knowledge Realty, listed Aug 2025 — already has a
+ * record by then; a REIT with no record on/after REBASE_ON_OR_AFTER has no
+ * defined base and is skipped entirely rather than dividing by zero.
  *
- * The post-tax yield (effectivePostTaxYieldPct, per REIT per record) is
- * NOT indexed — it's already a %, already comparable across REITs
- * without adjustment.
+ * Everything else on the row (the rupee payout, unit price, both yield
+ * %s, and the four-component rupee split) is carried unindexed, straight
+ * from the record — it's tooltip/hover detail for one real disclosed
+ * payout, not something that needs to sit on the shared indexed scale.
  */
 export function reitIndexedDistributionSeries(
   reitIds: readonly ReitId[],
@@ -166,11 +185,15 @@ export function reitIndexedDistributionSeries(
     for (const r of records) {
       const dividendInr = r.dividendExemptInr + r.dividendTaxableInr;
       const row: ReitIndexedDistributionRow = byDate.get(r.date) ?? { date: r.date };
-      row[`${reitId}_interest`] = round1((r.interestInr / base.totalDpuInr) * 100);
-      row[`${reitId}_dividend`] = round1((dividendInr / base.totalDpuInr) * 100);
-      row[`${reitId}_rental`] = round1((r.otherIncomeInr / base.totalDpuInr) * 100);
-      row[`${reitId}_returnOfCapital`] = round1((r.debtRepaymentCapReturnInr / base.totalDpuInr) * 100);
-      row[`${reitId}_yieldPct`] = round3(r.effectivePostTaxYieldPct * 100);
+      row[`${reitId}_indexed`] = round1((r.totalDpuInr / base.totalDpuInr) * 100);
+      row[`${reitId}_totalDpuInr`] = round2(r.totalDpuInr);
+      row[`${reitId}_priceInr`] = round2(r.recordPriceInr);
+      row[`${reitId}_grossYieldPct`] = round3(r.annualizedYieldPct * 100);
+      row[`${reitId}_postTaxYieldPct`] = round3(r.effectivePostTaxYieldPct * 100);
+      row[`${reitId}_interestInr`] = round2(r.interestInr);
+      row[`${reitId}_dividendInr`] = round2(dividendInr);
+      row[`${reitId}_rentalInr`] = round2(r.otherIncomeInr);
+      row[`${reitId}_returnOfCapitalInr`] = round2(r.debtRepaymentCapReturnInr);
       byDate.set(r.date, row);
     }
   }

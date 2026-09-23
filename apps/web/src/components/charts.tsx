@@ -284,47 +284,23 @@ function formatShortDate(iso: string): string {
 }
 
 /**
- * A fixed pixel width for each REIT's stacked bar in ReitIndexedPayoutChart.
- * Left unset, Recharts divides each category's band evenly across every
- * REIT group declared in the chart — even a category where only one REIT
- * actually disclosed that day still has its bar squeezed down to
- * (band width / REITs selected), which is what turned 5-REIT columns into
- * unreadable slivers. A fixed size keeps every REIT's column legible
- * regardless of selection count; defaultBrushStartIndex's row cap is what
- * keeps that many fixed-width columns from overflowing the chart.
- */
-const REIT_BAR_SIZE = 10;
-
-/**
  * The array index the Brush should default to, so the chart opens on
  * roughly the last year of history rather than the full multi-year span —
  * mirroring the point-in-time Brush's "show 1 year at a time, then pan/zoom
- * for more" ask.
- *
- * With several REITs selected at once, though, a full calendar year of
- * *combined* disclosure dates can pack in far more columns than a bar chart
- * renders legibly: each additional REIT both adds columns (its own
- * disclosure dates) and shrinks every column (Recharts divides each
- * category's width across all selected REITs' stacked groups, whether or
- * not a given REIT actually disclosed on that exact date) — the two effects
- * compound, which is what turned the "Return of capital" segments into a
- * near-continuous smear with all 5 REITs selected. So this also caps the
- * default window to the most recent `maxVisibleRows` rows and takes
- * whichever of the two candidate windows is narrower. A 1-2 REIT selection
- * never has enough rows in a year to hit that cap and still opens on the
- * full last-12-months view unchanged; a busy 4-5 REIT selection opens
- * tighter by default, and the Brush remains free to widen back out.
+ * for more" ask. ReitIndexedPayoutChart plots one line per REIT (with dots
+ * at actual disclosure dates) rather than grouped bars, so point density
+ * doesn't degrade readability the way it used to — a plain trailing-365-
+ * days default is enough, with no need to shrink further for busier
+ * multi-REIT selections.
  */
-function defaultBrushStartIndex(data: readonly { date: string }[], maxVisibleRows = 8): number {
+function defaultBrushStartIndex(data: readonly { date: string }[]): number {
   if (data.length === 0) return 0;
   const last = new Date(`${data[data.length - 1]!.date}T00:00:00Z`);
   const cutoff = new Date(last);
   cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 1);
   const cutoffIso = cutoff.toISOString().slice(0, 10);
-  const idxByDate = data.findIndex((row) => row.date >= cutoffIso);
-  const startByDate = idxByDate === -1 ? 0 : idxByDate;
-  const startByCount = Math.max(0, data.length - maxVisibleRows);
-  return Math.max(startByDate, startByCount);
+  const idx = data.findIndex((row) => row.date >= cutoffIso);
+  return idx === -1 ? 0 : idx;
 }
 
 /**
@@ -358,28 +334,37 @@ function renderFixedLegend(items: { value: string; type: 'square' | 'line'; colo
   );
 }
 
+/** Reads a numeric field off a ReitIndexedDistributionRow, defaulting to 0 — used in ReitIndexedPayoutChart's tooltip, where every field beyond `date` is typed loosely as `number | string`. */
+function num(v: number | string | undefined): number {
+  return typeof v === 'number' ? v : 0;
+}
+
 /**
  * Point-in-time view of what one or more REITs' dividend payouts have
- * actually looked like — one stacked column per REIT per actual
- * disclosure date (interest/dividend/rental/return-of-capital, the same
- * four-color scheme every other chart here uses), not bucketed or
- * blended together. Each REIT gets its own `stackId` (its dataKeys are
- * `${reitId}_interest` etc.) so two REITs never sum into one bar even if
- * their dates happened to coincide — in practice they sit at their own
- * distinct positions along one shared date axis. The four component
- * colors stay constant across REITs (position and the tooltip carry
- * which REIT a given column belongs to); the post-tax yield line for
- * each selected REIT, though, needs its own color, since multiple yield
- * lines can overlay directly — `series[].color` supplies that (and
- * drives the legend's per-REIT line entries).
+ * actually looked like: one line per REIT, indexed to 100 at that REIT's
+ * own FY2026-27 base record (see reitIndexedDistributionSeries), with a
+ * dot at every date that REIT actually disclosed a distribution —
+ * `connectNulls` draws a plain visual connector across the other REITs'
+ * rows in between, not a real value. Each REIT gets its own `series[].color`
+ * (drives both the line/dots and the legend).
+ *
+ * An earlier revision rendered these same point-in-time payouts as stacked
+ * bars, but with several REITs' worth of disclosure dates sharing one axis,
+ * Recharts had to shrink every bar's width per REIT selected — no amount
+ * of retuning the default window or an explicit bar size kept a 5-REIT
+ * selection legible. A line-plus-dot rendering has no such failure mode at
+ * any REIT count, which is why this replaces the bars outright. All the
+ * detail that used to be visible as stacked bar segments — the four-
+ * component rupee split, the actual per-unit payout and price, both yield
+ * %s (gross and effective post-tax) — now lives in the hover tooltip for
+ * that REIT's dot instead, per explicit user ask, rather than being
+ * visually stacked.
  *
  * A Brush (Recharts' built-in pan/zoom scrollbar) sits under the chart,
- * defaulting to roughly the most recent year of the visible REITs' data,
- * clamped tighter when several REITs are selected at once so the default
- * view stays legible (defaultBrushStartIndex) — dragging its handles
- * narrows or widens the window, dragging the window itself pans across the
- * full listed history, satisfying "show 1 year at a time... slider to zoom
- * in & out and navigate across."
+ * defaulting to the trailing ~12 months of history (defaultBrushStartIndex)
+ * — dragging its handles narrows or widens the window, dragging the window
+ * itself pans across the full listed history, satisfying "show 1 year at a
+ * time... slider to zoom in & out and navigate across."
  */
 export function ReitIndexedPayoutChart({
   data,
@@ -398,12 +383,7 @@ export function ReitIndexedPayoutChart({
   return (
     <div className="h-[26rem] w-full" role="img" aria-label={ariaLabel}>
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart
-          data={data as Record<string, number | string>[]}
-          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-          barCategoryGap="16%"
-          barGap={2}
-        >
+        <ComposedChart data={data as Record<string, number | string>[]} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={palette.hairline} vertical={false} />
           <XAxis
             dataKey="date"
@@ -420,68 +400,68 @@ export function ReitIndexedPayoutChart({
             tickLine={false}
             width={44}
           />
-          <YAxis
-            yAxisId="yieldPct"
-            orientation="right"
-            tickFormatter={(v: number) => `${v.toFixed(1)}%`}
-            tick={{ ...TICK_STYLE, fill: palette.inkMuted }}
-            axisLine={false}
-            tickLine={false}
-            width={48}
-          />
           <Tooltip
-            labelFormatter={(v) => formatShortDate(String(v))}
-            formatter={(v, name) => (String(name).includes('yield') ? [`${Number(v).toFixed(2)}%`, name] : [Number(v).toFixed(1), name])}
-            contentStyle={{
-              fontFamily: 'ui-monospace, monospace',
-              fontSize: 13,
-              background: palette.paper,
-              border: `1px solid ${palette.hairline}`,
-              borderRadius: 4,
-              color: palette.ink,
+            content={({ active, payload }) => {
+              if (!active || !payload || payload.length === 0) return null;
+              const points = payload
+                .map((p) => {
+                  const key = String(p.dataKey ?? '');
+                  const reitId = key.endsWith('_indexed') ? key.slice(0, -'_indexed'.length) : '';
+                  const s = series.find((x) => x.reitId === reitId);
+                  const row = p.payload as Record<string, number | string> | undefined;
+                  if (!s || !row || typeof row[`${reitId}_indexed`] !== 'number') return null;
+                  return { s, row, reitId };
+                })
+                .filter((x): x is { s: (typeof series)[number]; row: Record<string, number | string>; reitId: string } => x !== null);
+              if (points.length === 0) return null;
+              return (
+                <div
+                  style={{
+                    fontFamily: 'ui-monospace, monospace',
+                    fontSize: 12.5,
+                    lineHeight: 1.5,
+                    background: palette.paper,
+                    border: `1px solid ${palette.hairline}`,
+                    borderRadius: 4,
+                    color: palette.ink,
+                    padding: '8px 10px',
+                    maxWidth: 300,
+                  }}
+                >
+                  {points.map(({ s, row, reitId }) => (
+                    <div key={reitId} style={{ marginBottom: 4 }}>
+                      <div style={{ fontWeight: 600, color: s.color }}>
+                        {s.label} · {formatShortDate(String(row.date))}
+                      </div>
+                      <div>1. Payout per share: {formatINR(num(row[`${reitId}_totalDpuInr`]), { decimals: 2 })}</div>
+                      <div>2. Share price: {formatINR(num(row[`${reitId}_priceInr`]), { decimals: 2 })}</div>
+                      <div>3. Yield % (absolute): {num(row[`${reitId}_grossYieldPct`]).toFixed(2)}%</div>
+                      <div>
+                        4. Split of payout: Interest {formatINR(num(row[`${reitId}_interestInr`]), { decimals: 2 })} · Dividend{' '}
+                        {formatINR(num(row[`${reitId}_dividendInr`]), { decimals: 2 })} · Rental{' '}
+                        {formatINR(num(row[`${reitId}_rentalInr`]), { decimals: 2 })} · Return of capital{' '}
+                        {formatINR(num(row[`${reitId}_returnOfCapitalInr`]), { decimals: 2 })}
+                      </div>
+                      <div>5. Yield % (effective, after tax): {num(row[`${reitId}_postTaxYieldPct`]).toFixed(2)}%</div>
+                    </div>
+                  ))}
+                </div>
+              );
             }}
           />
-          <Legend
-            content={() =>
-              renderFixedLegend(
-                [
-                  { value: 'Interest', type: 'square', color: palette.rust },
-                  { value: 'Dividend', type: 'square', color: palette.moss },
-                  { value: 'Rental', type: 'square', color: palette.ochre },
-                  { value: 'Return of capital', type: 'square', color: palette.ink },
-                  ...series.map((s) => ({ value: `${s.label} yield`, type: 'line' as const, color: s.color })),
-                ],
-                palette.ink,
-              )
-            }
-          />
-          {series.flatMap((s) => [
-            <Bar key={`${s.reitId}-interest`} isAnimationActive={false} yAxisId="index" dataKey={`${s.reitId}_interest`} name={`${s.label} · Interest`} stackId={s.reitId} fill={palette.rust} barSize={REIT_BAR_SIZE} />,
-            <Bar key={`${s.reitId}-dividend`} isAnimationActive={false} yAxisId="index" dataKey={`${s.reitId}_dividend`} name={`${s.label} · Dividend`} stackId={s.reitId} fill={palette.moss} barSize={REIT_BAR_SIZE} />,
-            <Bar key={`${s.reitId}-rental`} isAnimationActive={false} yAxisId="index" dataKey={`${s.reitId}_rental`} name={`${s.label} · Rental`} stackId={s.reitId} fill={palette.ochre} barSize={REIT_BAR_SIZE} />,
-            <Bar
-              key={`${s.reitId}-returnOfCapital`}
-              isAnimationActive={false}
-              yAxisId="index"
-              dataKey={`${s.reitId}_returnOfCapital`}
-              name={`${s.label} · Return of capital`}
-              stackId={s.reitId}
-              fill={palette.ink}
-              radius={[2, 2, 0, 0]}
-              barSize={REIT_BAR_SIZE}
-            />,
-          ])}
+          <Legend content={() => renderFixedLegend(series.map((s) => ({ value: s.label, type: 'line' as const, color: s.color })), palette.ink)} />
           {series.map((s) => (
             <Line
-              key={`${s.reitId}-yield`}
+              key={s.reitId}
               isAnimationActive={false}
-              yAxisId="yieldPct"
+              yAxisId="index"
               type="monotone"
-              dataKey={`${s.reitId}_yieldPct`}
-              name={`${s.label} yield`}
+              dataKey={`${s.reitId}_indexed`}
+              name={s.label}
               stroke={s.color}
-              strokeWidth={2}
-              dot={false}
+              strokeWidth={2.5}
+              dot={{ r: 3.5, strokeWidth: 0, fill: s.color }}
+              activeDot={{ r: 5.5 }}
               connectNulls
             />
           ))}
