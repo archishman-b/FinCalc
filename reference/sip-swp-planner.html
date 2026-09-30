@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SIP &amp; SWP planner · FinCalc</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+try{var t=localStorage.getItem("reit-sim-theme"); if(t==="light"||t==="dark") document.documentElement.setAttribute("data-theme",t);}catch(e){}
+</script>
+<style>
+:root{
+  --ui:"Geist","Helvetica Neue",system-ui,sans-serif;
+  --num:"Geist Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  /* light (default tokens) */
+  --paper:#F4F5F3; --head:#FFFFFF; --panel:#F8F8F6; --rail:#FAFAF9; --sheet:#FFFFFF; --field:#FFFFFF;
+  --ink:#111418; --ink2:#343A42; --muted:#5A616B; --rule:#E1E3E0; --rule2:#C7CBC7;
+  --accent:#D98A00; --acctext:#935C00; --onacc:#FFFFFF; --accent-soft:#FDF3E0; --preset:#FDF3E0;
+  --warn:#B86A00; --warn-soft:#FCF1DE; --line2:#8A929E; --s3:#1F6FD1;
+  --segon:#FFFFFF; --hl:#FBF7EF; --rowhl:#EAF2FC; --badge-bg:#FCEFD6; --badge-fg:#7A4B00;
+  --p1bg:#E3F1EB; --p1fg:#0B5A43; --p2bg:#E4EEFB; --p2fg:#1756A5; --p3bg:#FCEFD6; --p3fg:#7A4B00; --p4bg:#EEEFEC; --p4fg:#5A616B;
+  --shadow:0 1px 2px rgba(17,20,24,.04);
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0B0D10; --head:#0B0D10; --panel:#0F1216; --rail:#0D1013; --sheet:#12151A; --field:#0E1115;
+    --ink:#ECEEF1; --ink2:#C3C9D1; --muted:#8C95A2; --rule:#232830; --rule2:#39414C;
+    --accent:#F5A524; --acctext:#F5B547; --onacc:#1A1204; --accent-soft:#2A2210; --preset:#2A2210;
+    --warn:#F5A524; --warn-soft:#2A2210; --line2:#7D8795; --s3:#5AB0FF;
+    --segon:#262C35; --hl:#16191F; --rowhl:#172536; --badge-bg:#3A2A0A; --badge-fg:#F5C46A;
+    --p1bg:#1C2A25; --p1fg:#8FD9BE; --p2bg:#13263A; --p2fg:#8CC8FF; --p3bg:#34270C; --p3fg:#F5C46A; --p4bg:#1B1F26; --p4fg:#8C95A2;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+    --paper:#0B0D10; --head:#0B0D10; --panel:#0F1216; --rail:#0D1013; --sheet:#12151A; --field:#0E1115;
+    --ink:#ECEEF1; --ink2:#C3C9D1; --muted:#8C95A2; --rule:#232830; --rule2:#39414C;
+    --accent:#F5A524; --acctext:#F5B547; --onacc:#1A1204; --accent-soft:#2A2210; --preset:#2A2210;
+    --warn:#F5A524; --warn-soft:#2A2210; --line2:#7D8795; --s3:#5AB0FF;
+    --segon:#262C35; --hl:#16191F; --rowhl:#172536; --badge-bg:#3A2A0A; --badge-fg:#F5C46A;
+    --p1bg:#1C2A25; --p1fg:#8FD9BE; --p2bg:#13263A; --p2fg:#8CC8FF; --p3bg:#34270C; --p3fg:#F5C46A; --p4bg:#1B1F26; --p4fg:#8C95A2;
+    --shadow:none;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--paper);color:var(--ink);font:13px/1.45 var(--ui);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;overflow-x:hidden}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{font:inherit;cursor:pointer}
+a{color:var(--acctext)}
+
+/* top bar + ticker */
+.topbar{position:sticky;top:0;z-index:20;background:var(--head);border-bottom:1px solid var(--rule);padding-top:env(safe-area-inset-top,0px)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;height:52px;padding:0 24px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand .mark{width:20px;height:20px;border-radius:5px;background:var(--accent);flex-shrink:0}
+.brand b{font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+.brand span{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar nav{display:flex;gap:22px;font-size:12.5px}
+.bar nav a{color:var(--muted);text-decoration:none}
+.bar nav a[aria-current]{color:var(--ink);font-weight:600}
+@media (max-width:720px){.bar nav{display:none}}
+.iconbtn{width:32px;height:32px;border-radius:6px;border:1px solid var(--rule);background:transparent;color:var(--ink2);display:flex;align-items:center;justify-content:center}
+.iconbtn:hover{border-color:var(--rule2)}
+.ticker{display:flex;align-items:center;height:36px;border-top:1px solid var(--rule);background:var(--panel);overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+.ticker::-webkit-scrollbar{display:none}
+.ticker .lab{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:0 16px 0 24px}
+.ticker .it{display:flex;align-items:baseline;gap:9px;padding:0 16px;border-left:1px solid var(--rule)}
+.ticker .it span{font-size:11.5px;color:var(--muted)}
+.ticker .it b{font:500 12px var(--num);color:var(--ink)}
+.ticker .it i{font:500 12px var(--num);font-style:normal;color:var(--acctext)}
+
+/* layout */
+.layout{display:grid;grid-template-columns:300px minmax(0,1fr);align-items:start;min-height:calc(100vh - 89px)}
+@media (max-width:980px){.layout{grid-template-columns:minmax(0,1fr)}}
+aside{position:sticky;top:89px;max-height:calc(100vh - 89px);overflow:auto;background:var(--rail);border-right:1px solid var(--rule);padding:4px 22px 24px}
+@media (max-width:980px){aside{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--rule)}}
+aside h2{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--acctext);margin:14px 0 10px;padding-top:14px;border-top:1px solid var(--rule)}
+aside h2:first-child{border-top:0;padding-top:10px}
+.field{display:grid;grid-template-columns:minmax(0,1fr) 104px;gap:10px;align-items:center;margin:0 0 9px}
+.field label{font-size:12px;color:var(--ink2)}
+.field small{display:block;color:var(--muted);font-size:10.5px;line-height:1.35;margin-top:1px}
+input[type=number],input.money,input[type=text],select{width:100%;height:32px;font:500 12.5px var(--num);padding:0 10px;border:1px solid var(--rule);border-radius:5px;background:var(--field);color:var(--ink);text-align:right}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input:disabled{color:var(--muted);opacity:.7}
+input:hover:not(:disabled),select:hover{border-color:var(--rule2)}
+select{text-align:left;font-family:var(--ui);font-size:12.5px}
+.hint{display:block;color:var(--muted);font:11px var(--num);text-align:right;margin:-6px 0 9px}
+/* sliders */
+.rngwrap{margin:-3px 0 12px}
+.rng{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;margin:0;cursor:pointer;--pct:50%}
+.rng::-webkit-slider-runnable-track{height:3px;border-radius:3px;background:linear-gradient(to right,var(--accent) 0,var(--accent) var(--pct),var(--rule2) var(--pct),var(--rule2) 100%)}
+.rng::-moz-range-track{height:3px;border-radius:3px;background:var(--rule2)}
+.rng::-moz-range-progress{height:3px;border-radius:3px;background:var(--accent)}
+.rng::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5.5px;border-radius:50%;background:var(--sheet);border:2px solid var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .1s}
+.rng::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:var(--sheet);border:2px solid var(--accent)}
+.rng:hover::-webkit-slider-thumb{transform:scale(1.15)}
+.rng:focus-visible{outline:none}
+.rng:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px var(--accent-soft),0 0 0 4px var(--accent)}
+.rngl{display:flex;justify-content:space-between;font:10px var(--num);color:var(--muted);margin-top:1px}
+.field:has(+ .rngwrap){margin-bottom:4px}
+.field:has(input[data-nostep]){grid-template-columns:minmax(0,1fr) 72px}
+/* steppers */
+.stp{position:relative;display:block;width:100%}
+.stp input{padding-right:24px}
+.stp .arr{position:absolute;right:1px;top:1px;bottom:1px;width:20px;display:flex;flex-direction:column;border-left:1px solid var(--rule);border-radius:0 4px 4px 0;overflow:hidden;opacity:.55;transition:opacity .12s}
+.stp:hover .arr,.stp:focus-within .arr{opacity:1}
+.stp .arr button{flex:1;display:flex;align-items:center;justify-content:center;border:0;padding:0;background:transparent;color:var(--muted);min-height:0}
+.stp .arr button+button{border-top:1px solid var(--rule)}
+.stp .arr button:hover{background:var(--accent-soft);color:var(--acctext)}
+.stp .arr button:active{background:var(--accent);color:var(--onacc)}
+.stp .arr svg{width:8px;height:5px}
+.stp.dis .arr{opacity:.25;pointer-events:none}
+.alloc .row .stp input{padding-right:22px}
+.check{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.35;color:var(--ink2);margin:2px 0 11px;cursor:pointer}
+.check input{margin:1px 0 0;width:15px;height:15px;accent-color:var(--accent);flex-shrink:0}
+.check small{display:block;color:var(--muted);font-size:10.5px;margin-top:2px}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.presets button{flex:1 1 auto;height:30px;padding:0 8px;border-radius:5px;border:1px solid var(--rule);background:var(--field);color:var(--ink2);font-size:11.5px;font-weight:500;white-space:nowrap}
+.presets button[aria-pressed=true]{border-color:var(--accent);background:var(--preset);color:var(--ink);font-weight:600}
+.alloc{margin:0 0 10px}
+.alloc .row{display:grid;grid-template-columns:minmax(0,1fr) 62px;gap:8px;align-items:center;margin:0 0 8px;font-size:12px}
+.alloc .row small{display:block;color:var(--muted);font:10.5px var(--num);margin-top:1px}
+.alloc .row input{height:30px;padding:0 8px}
+.alloc .tot{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);border-top:1px solid var(--rule);padding-top:7px}
+.alloc .tot span:last-child{font-family:var(--num)}
+.alloc .tot.bad{color:var(--warn);font-weight:700}
+.alloc p.basis{font-size:10.5px;color:var(--muted);margin:0 0 10px;line-height:1.4}
+.rowbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.rowbtns button,.btn{height:32px;padding:0 12px;border-radius:5px;border:1px solid var(--rule);background:var(--field);color:var(--ink);font-size:12px;font-weight:500}
+.rowbtns button:hover,.btn:hover{border-color:var(--rule2)}
+
+main{min-width:0;padding:22px 28px 48px;display:flex;flex-direction:column;gap:14px}
+@media (max-width:640px){main{padding:18px 14px 40px}}
+.eyebrow{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--acctext)}
+.lead{font-size:clamp(17px,1.7vw,22px);line-height:1.38;font-weight:500;letter-spacing:-.02em;margin:4px 0 4px;max-width:66ch}
+.lead strong{font-weight:700}
+.lead em{font-style:normal;font-weight:700;color:var(--acctext)}
+
+.card{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;box-shadow:var(--shadow);padding:18px 20px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card h2,.chartbox h3{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.note{margin:0;font-size:12px;line-height:1.5;color:var(--muted);max-width:90ch}
+
+/* strategies */
+.compare{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--sheet);border:1px solid var(--rule);border-radius:8px;overflow:hidden;box-shadow:var(--shadow)}
+@media (max-width:900px){.compare{grid-template-columns:minmax(0,1fr)}}
+.cbar{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 12px 7px 20px;border-bottom:1px solid var(--rule);background:var(--panel);font-size:11.5px;color:var(--muted)}
+.cbar .ttl{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase}
+.cbar .r{display:flex;align-items:center;gap:10px}
+.strat{padding:18px 20px 20px;min-width:0;display:flex;flex-direction:column}
+.strat+.strat{border-left:1px solid var(--rule)}
+@media (max-width:900px){.strat+.strat{border-left:0;border-top:1px solid var(--rule)}}
+.strat h3{margin:0 0 8px;font-size:13.5px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.strat h3 .t{display:flex;align-items:center;gap:9px}
+.swatch{width:14px;height:0;border-top:2px solid;display:inline-block;flex-shrink:0}
+.swatch.dash{border-top-style:dashed}
+.badge{font-size:10.5px;font-weight:600;letter-spacing:.03em;padding:2px 8px;border-radius:999px;background:var(--badge-bg);color:var(--badge-fg);white-space:nowrap}
+.badge[hidden]{display:none}
+.strat p.rule{margin:0 0 10px;color:var(--muted);font-size:11.5px;line-height:1.45;min-height:3.2em}
+.big{font:500 clamp(26px,2.6vw,32px)/1.05 var(--num);letter-spacing:-.03em}
+.bigsub{font-size:11px;color:var(--muted);margin:4px 0 10px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:0 12px;font-size:12px}
+.kv span{padding:3px 0}
+.kv span:nth-of-type(odd){color:var(--muted)}
+.kv span:nth-of-type(even){text-align:right;font:600 12px var(--num)}
+.kv i.sep{grid-column:1/-1;height:1px;background:var(--rule);margin:5px 0}
+.flag{display:inline-block;margin-top:12px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--p2bg);color:var(--p2fg)}
+.flag.none{background:var(--warn-soft);color:var(--ink)}
+
+/* segmented control */
+.seg{display:inline-flex;gap:2px;padding:3px;border-radius:7px;background:var(--panel);border:1px solid var(--rule)}
+.seg button{height:26px;padding:0 11px;border:0;border-radius:4px;background:transparent;color:var(--muted);font-size:12px;font-weight:500;white-space:nowrap}
+.seg button[aria-pressed=true]{background:var(--segon);color:var(--ink);font-weight:600;box-shadow:var(--shadow)}
+.card .seg,.chartbox .seg{background:var(--panel)}
+
+/* income */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+@media (max-width:900px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{padding:15px 18px;border-right:1px solid var(--rule);min-width:0}
+.stat:last-child{border-right:0}
+@media (max-width:900px){.stat:nth-child(2){border-right:0}.stat:nth-child(-n+2){border-bottom:1px solid var(--rule)}}
+.stat.hl{background:var(--hl)}
+.stat .lbl{font-size:11.5px;color:var(--muted);line-height:1.3;min-height:2.6em}
+.stat .num{font:500 clamp(21px,2vw,26px)/1.15 var(--num);letter-spacing:-.03em;margin-top:5px}
+.stat.hl .num{color:var(--acctext)}
+.stat .sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* tables */
+.scroll{overflow:auto;border:1px solid var(--rule);border-radius:6px;background:var(--sheet)}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--rule);text-align:right;white-space:nowrap}
+td{font-family:var(--num);font-size:12px}
+th{font-weight:600;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--panel);position:sticky;top:0}
+th:first-child,td:first-child{text-align:left}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--hl)}
+td input[type=number],td input[type=text]{width:72px;height:28px;padding:0 8px;font-size:12px}
+td input.name{width:132px;text-align:left;font-family:var(--ui)}
+td input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent)}
+td.sumbad{color:var(--warn);font-weight:700}
+tr.off td{opacity:.45}
+tfoot td{font-weight:700;background:var(--panel);border-top:1px solid var(--rule)}
+td.grp,th.grp{border-left:1px solid var(--rule)}
+td.zero{color:var(--muted)}
+td.strong{font-weight:700}
+td button{height:28px;padding:0 10px;border-radius:5px;border:1px solid var(--rule);background:transparent;color:var(--ink2);font-size:11.5px}
+.warn{display:flex;gap:10px;align-items:center;background:var(--warn-soft);color:var(--ink);padding:8px 12px;border-radius:6px;font-size:12px;margin-top:10px}
+.warn::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warn);flex-shrink:0}
+
+/* charts */
+.charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:820px){.charts{grid-template-columns:minmax(0,1fr)}}
+.chartbox{min-width:0;overflow:hidden;background:var(--sheet);border:1px solid var(--rule);border-radius:8px;box-shadow:var(--shadow);padding:16px 18px 10px;display:flex;flex-direction:column;gap:8px}
+.chartbox.wide{grid-column:1/-1}
+.chartbox .row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.chartbox .c{position:relative;height:230px;width:100%;min-width:0}
+.chartbox.wide .c{height:300px}
+.chartbox canvas{max-width:100%}
+
+/* year by year */
+.yby .head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.yby .head p{margin:3px 0 0;color:var(--muted);font-size:12px;max-width:72ch;line-height:1.45}
+.yby .scroll{max-height:540px}
+.yby thead th{z-index:2;white-space:normal;vertical-align:bottom;line-height:1.3;min-width:88px}
+.yby th:first-child,.yby td:first-child{position:sticky;left:0;z-index:1;background:var(--sheet);min-width:58px}
+.yby thead th:first-child{z-index:3;background:var(--panel)}
+.yby tr.winend td{border-bottom:2px solid var(--accent)}
+.yby tr.hl td,.yby tr.hl td:first-child{background:var(--rowhl)}
+.pill{display:inline-block;font:600 11px var(--ui);padding:2px 8px;border-radius:999px;white-space:nowrap}
+.pill.contrib{background:var(--p1bg);color:var(--p1fg)}
+.pill.self,.pill.offramp{background:var(--p2bg);color:var(--p2fg)}
+.pill.harvest{background:var(--p3bg);color:var(--p3fg)}
+.pill.hold{background:var(--p4bg);color:var(--p4fg)}
+
+details.notes{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;box-shadow:var(--shadow)}
+details.notes summary{cursor:pointer;font-weight:600;font-size:13px;padding:14px 18px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.notes summary::-webkit-details-marker{display:none}
+details.notes summary::after{content:"";width:7px;height:7px;border-right:1.6px solid var(--muted);border-bottom:1.6px solid var(--muted);transform:rotate(-45deg);transition:transform .15s}
+details.notes[open] summary::after{transform:rotate(45deg)}
+details.notes ul{margin:0;padding:0 18px 16px 36px}
+details.notes li{margin:6px 0;max-width:95ch;font-size:12.5px;color:var(--ink2)}
+footer{color:var(--muted);font-size:11.5px;max-width:95ch;line-height:1.5}
+
+/* slim scrollbars */
+@supports not selector(::-webkit-scrollbar){*{scrollbar-width:thin;scrollbar-color:var(--rule2) transparent}}
+*::-webkit-scrollbar{width:8px;height:8px}
+*::-webkit-scrollbar-track,*::-webkit-scrollbar-corner{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--rule2);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--accent);border:2px solid transparent;background-clip:padding-box}
+aside::-webkit-scrollbar-thumb{background:transparent}
+aside:hover::-webkit-scrollbar-thumb{background:var(--rule2);background-clip:padding-box}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* SIP/SWP additions */
+.cond[hidden]{display:none}
+.field.stack{grid-template-columns:minmax(0,1fr);gap:5px}
+.badge.bad{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--warn-soft);color:var(--warn)}
+.evt{border:1px solid var(--rule);border-radius:6px;padding:8px 10px;margin:0 0 8px;background:var(--field)}
+.evt.off{opacity:.55}
+.evt-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.evt-top .check{margin:0}
+.evt-name{flex:1;min-width:0;height:28px!important;text-align:left!important;font-family:var(--ui)!important;font-size:12px!important;background:transparent!important;border-color:transparent!important;padding:0 4px!important}
+.evt-name:hover,.evt-name:focus{border-color:var(--rule)!important}
+.evt-x{width:24px;height:24px;border:0;border-radius:4px;background:transparent;color:var(--muted);font-size:16px;line-height:1}
+.evt-x:hover{background:var(--accent-soft);color:var(--acctext)}
+.evt-grid{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px}
+.evt-grid label{display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:var(--muted)}
+.evt-grid input{height:30px}
+td select{height:28px;font-size:12px;padding:0 8px}
+#addEvt:disabled{opacity:.5;cursor:default}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="bar">
+    <div class="brand"><span class="mark" aria-hidden="true"></span><b>FinCalc</b><span>/ SIP &amp; SWP planner</span></div>
+    <nav aria-label="Modules"><a href="https://claude.ai/artifact/KP6Cs6gmMuGvUvTKTbLZeu" target="_top">REIT income</a><a href="#top" aria-current="page">SIP &amp; SWP</a></nav>
+    <button type="button" class="iconbtn" id="theme" aria-label="Switch theme"></button>
+  </div>
+  <div class="ticker" id="ticker" aria-label="Portfolio assumptions"></div>
+</div>
+
+<div class="layout">
+<aside aria-label="Assumptions">
+  <h2>Money in · total</h2>
+  <div class="field"><label for="lump">Lumpsum at start (₹)</label><input id="lump" data-step="100000" class="money" type="text" inputmode="numeric" autocomplete="off"></div>
+  <span class="hint" id="lumpHint"></span>
+  <div class="field"><label for="sip">Monthly SIP (₹)</label><input id="sip" data-step="5000" class="money" type="text" inputmode="numeric" autocomplete="off"></div>
+  <span class="hint" id="sipHint"></span>
+  <div class="field"><label for="stepup">SIP step-up <small>% a year</small></label><input id="stepup" type="number" min="0" max="50" step="1"></div>
+
+  <h2>Allocation across holdings</h2>
+  <div class="presets" role="group" aria-label="Allocation presets">
+    <button type="button" data-a="index">Index only</button>
+    <button type="button" data-a="aggr">80/20</button>
+    <button type="button" data-a="bal">60/40</button>
+    <button type="button" data-a="cons">30/70</button>
+  </div>
+  <div class="alloc"><p class="basis" id="allocBasis"></p><div id="allocRows"></div><div class="tot" id="allocTot"></div></div>
+
+  <h2>Timeline</h2>
+  <div class="field"><label for="win">SIP runs for <small>years you invest monthly</small></label><input id="win" type="number" min="0" max="50" step="1" data-nostep></div>
+  <div class="rngwrap"><input type="range" class="rng" data-for="win" min="0" max="50" step="1" aria-label="SIP years slider"><div class="rngl"><span>0 yrs</span><span>50 yrs</span></div></div>
+  <div class="field"><label for="swps">Withdrawals start in <small>year number</small></label><input id="swps" type="number" min="1" max="50" step="1" data-nostep></div>
+  <div class="rngwrap"><input type="range" class="rng" data-for="swps" min="1" max="50" step="1" aria-label="Withdrawal start year slider"><div class="rngl"><span>Yr 1</span><span>Yr 50</span></div></div>
+  <div class="field"><label for="years">Total horizon <small>years</small></label><input id="years" type="number" min="1" max="50" step="1" data-nostep></div>
+  <div class="rngwrap"><input type="range" class="rng" data-for="years" min="1" max="50" step="1" aria-label="Total horizon slider"><div class="rngl"><span>1 yr</span><span>50 yrs</span></div></div>
+
+  <h2>Withdrawals (SWP)</h2>
+  <div class="field stack"><label for="mode">How you withdraw</label>
+    <select id="mode"><option value="fixed">Fixed amount a month</option><option value="pct">Fixed % of the corpus</option><option value="spread">Spread over N years</option><option value="once">All at once</option></select></div>
+  <div class="cond" data-mode="fixed">
+    <div class="field"><label for="amt">Monthly withdrawal (₹) <small>in today's money, before tax</small></label><input id="amt" data-step="5000" class="money" type="text" inputmode="numeric" autocomplete="off"></div>
+    <span class="hint" id="amtHint"></span>
+    <label class="check"><input id="tie" type="checkbox"><span>Rise with inflation each year <small>keeps its buying power</small></span></label>
+    <div class="field"><label for="wg">Yearly increase <small>% a year, if not tied</small></label><input id="wg" type="number" min="0" max="20" step="0.5"></div>
+  </div>
+  <div class="cond" data-mode="pct">
+    <div class="field"><label for="pct">Withdrawal rate <small>% of the corpus a year, reset each year</small></label><input id="pct" type="number" min="0.5" max="20" step="0.5" data-nostep></div>
+    <div class="rngwrap"><input type="range" class="rng" data-for="pct" min="1" max="12" step="0.5" aria-label="Withdrawal rate slider"><div class="rngl"><span>1%</span><span>12%</span></div></div>
+  </div>
+  <div class="cond" data-mode="spread">
+    <div class="field"><label for="spread">Spread over <small>years; empties the corpus by the end</small></label><input id="spread" type="number" min="1" max="40" step="1" data-nostep></div>
+    <div class="rngwrap"><input type="range" class="rng" data-for="spread" min="1" max="40" step="1" aria-label="Spread years slider"><div class="rngl"><span>1 yr</span><span>40 yrs</span></div></div>
+  </div>
+  <div class="field stack"><label for="from">Sell from</label>
+    <select id="from"><option value="prop">All holdings in proportion</option><option value="safe">Safest holdings first</option></select></div>
+
+  <h2>One-off withdrawals</h2>
+  <p class="basis" style="font-size:10.5px;color:var(--muted);margin:0 0 10px;line-height:1.4">Planned big expenses, in today's money. They're taken at the start of the year you set, on top of any SWP.</p>
+  <div id="evtRows"></div>
+  <div class="rowbtns" style="margin-top:4px"><button type="button" id="addEvt">+ Add a one-off withdrawal</button></div>
+
+  <h2>De-risking</h2>
+  <label class="check"><input id="glide" type="checkbox"><span>Shift to a safer mix before withdrawals <small>moves money from equity to your other holdings, year by year</small></span></label>
+  <div class="cond" data-glide="1">
+    <div class="field"><label for="gy">Glide over <small>years before withdrawals start</small></label><input id="gy" type="number" min="1" max="15" step="1" data-nostep></div>
+    <div class="rngwrap"><input type="range" class="rng" data-for="gy" min="1" max="15" step="1" aria-label="Glide years slider"><div class="rngl"><span>1 yr</span><span>15 yrs</span></div></div>
+    <div class="field"><label for="geq">Equity share by then <small>% of the portfolio</small></label><input id="geq" type="number" min="0" max="100" step="5" data-nostep></div>
+    <div class="rngwrap"><input type="range" class="rng" data-for="geq" min="0" max="100" step="5" aria-label="Target equity share slider"><div class="rngl"><span>0%</span><span>100%</span></div></div>
+  </div>
+  <label class="check"><input id="rebal" type="checkbox"><span>Rebalance to target once a year <small>selling to rebalance is taxed</small></span></label>
+
+  <h2>Returns and inflation</h2>
+  <div class="presets" role="group" aria-label="Return scenario">
+    <button type="button" data-s="bear">Bear</button>
+    <button type="button" data-s="base">Base</button>
+    <button type="button" data-s="bull">Bull</button>
+  </div>
+  <p class="basis" id="scenNote" style="font-size:10.5px;color:var(--muted);margin:-2px 0 10px;line-height:1.4"></p>
+  <div class="field"><label for="inf">Inflation <small>% a year</small></label><input id="inf" type="number" min="0" max="20" step="0.1" data-nostep></div>
+  <div class="rngwrap"><input type="range" class="rng" data-for="inf" min="0" max="12" step="0.5" aria-label="Inflation slider"><div class="rngl"><span>0%</span><span>12%</span></div></div>
+
+  <h2>Tax</h2>
+  <div class="field"><label for="slab">Your slab rate <small>debt funds and short-term non-equity; 30% + cess = 31.2</small></label><input id="slab" type="number" min="0" max="45" step="0.01"></div>
+  <div class="field"><label for="ltcg">Equity long-term gains <small>held over 12 months, %</small></label><input id="ltcg" type="number" min="0" max="40" step="0.5"></div>
+  <div class="field"><label for="stcg">Equity short-term gains %</label><input id="stcg" type="number" min="0" max="40" step="0.5"></div>
+  <div class="field"><label for="exempt">Equity gains exempt (₹) <small>a year, shared with REITs and shares</small></label><input id="exempt" data-step="5000" class="money" type="text" inputmode="numeric" autocomplete="off"></div>
+  <div class="field"><label for="oltcg">Other long-term gains <small>hybrid, gold, international; over 24 months, %</small></label><input id="oltcg" type="number" min="0" max="40" step="0.5"></div>
+  <div class="field"><label for="cgcess">Cess on gains tax %</label><input id="cgcess" type="number" min="0" max="10" step="0.5"></div>
+
+  <h2>Fixed deposit comparison</h2>
+  <div class="field"><label for="fd">FD interest rate <small>% a year; set your bank's rate</small></label><input id="fd" type="number" min="0" max="15" step="0.05"></div>
+
+  <div class="rowbtns">
+    <button type="button" id="reset">Reset to defaults</button>
+  </div>
+</aside>
+
+<main id="top">
+  <div><div class="eyebrow" id="eyebrow"></div><p class="lead" id="lead" aria-live="polite"></p></div>
+  <div class="compare">
+    <div class="cbar"><span class="ttl" id="cbarTtl">Plan</span><div class="r"><span>Figures shown in</span>
+      <div class="seg" role="group" aria-label="Rupee basis"><button type="button" data-nom="0">Today's ₹</button><button type="button" data-nom="1">Future ₹</button></div></div></div>
+    <div class="strat"><h3><span class="t"><span class="swatch" style="border-top-color:var(--line2)"></span>1. Build</span><span class="badge" id="b1Badge" hidden></span></h3>
+      <p class="rule" id="r1"></p>
+      <div class="big" id="v1"></div><div class="bigsub" id="u1"></div><div class="kv" id="k1"></div></div>
+    <div class="strat"><h3><span class="t"><span class="swatch" style="border-top-color:var(--accent)"></span>2. Withdraw</span><span class="badge" id="b2Badge" hidden></span></h3>
+      <p class="rule" id="r2"></p>
+      <div class="big" id="v2"></div><div class="bigsub" id="u2"></div><div class="kv" id="k2"></div><div id="f2"></div></div>
+    <div class="strat"><h3><span class="t"><span class="swatch dash" style="border-top-color:var(--s3)"></span>3. Outcome</span></h3>
+      <p class="rule" id="r3"></p>
+      <div class="big" id="v3"></div><div class="bigsub" id="u3"></div><div class="kv" id="k3"></div></div>
+  </div>
+
+  <section class="card income" id="income">
+    <div><h2>Withdrawals and tax</h2>
+    <p class="note">What the plan pays you once withdrawals start, how much of it goes to tax, and how it compares with leaving the same corpus in a fixed deposit. Only the gain inside each redemption is taxed, which is why SWPs are tax-light early on.</p></div>
+    <div class="stats" id="stats"></div>
+    <div class="scroll"><table id="mileTable"><thead></thead><tbody></tbody></table></div>
+    <p class="note" id="mileNote"></p>
+  </section>
+
+  <div class="charts">
+    <div class="chartbox wide"><div class="row"><h3 id="hValue">Corpus</h3></div><div class="c"><canvas id="chValue" aria-label="Corpus, money put in and cash taken out by year"></canvas></div></div>
+    <div class="chartbox wide yby">
+      <div class="head"><div><h3>Year by year</h3><p id="ybyNote"></p></div></div>
+      <div class="scroll"><table id="ybyTable"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="chartbox"><div class="row"><h3>Money in and out each month</h3></div><div class="c"><canvas id="chFlow" aria-label="Monthly SIP paid and withdrawals received by year"></canvas></div></div>
+    <div class="chartbox"><div class="row"><h3 id="hMix">Portfolio mix</h3>
+      <div class="seg" role="group" aria-label="Second chart view"><button type="button" data-mv="mix" aria-pressed="true">Equity share</button><button type="button" data-mv="tax" aria-pressed="false">Tax each year</button></div></div><div class="c"><canvas id="chMix" aria-label="Equity share or tax paid by year"></canvas></div></div>
+  </div>
+
+  <section class="card ledger" id="holdings">
+    <h2>The portfolio</h2>
+    <p class="note">Every cell is editable. Returns are long-run assumptions before costs, not forecasts or fund data; the expense ratio is taken off each year. Tax type decides the rules: equity (equity funds, index funds, ETFs, listed shares), debt (debt funds, taxed at your slab rate however long you hold), or other (hybrid, gold, international: long-term after 24 months).</p>
+    <div class="scroll"><table id="inTable">
+      <thead><tr><th>Include</th><th>Holding</th><th style="text-align:left">Tax type</th><th>Allocation %</th><th>Return % <small style="font-weight:400">(before costs)</small></th><th>Expense ratio %</th><th>Net return %</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div id="mixWarn"></div>
+    <div class="rowbtns" style="margin-top:0"><button type="button" id="addRow">+ Add a holding</button></div>
+  </section>
+
+  <section class="card ledger">
+    <h2>Result by holding</h2>
+    <p class="note" id="resNote"></p>
+    <div class="scroll"><table id="outTable"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
+  </section>
+
+  <details class="notes" id="method">
+    <summary>How the numbers are worked out</summary>
+    <ul>
+      <li>The lumpsum is invested in month 0 and the SIP at the start of each month it runs, split by your allocation (scaled to 100% over the holdings switched on). Each holding grows monthly at its net return: return before costs, adjusted by the Bear/Base/Bull scenario, minus the expense ratio. Growth options are assumed, so there are no dividends.</li>
+      <li>Withdrawals sell units first-in, first-out, so the oldest (usually most-taxed) units go first, as the tax rules require. Only the gain on the units sold is taxed, not the whole withdrawal.</li>
+      <li>Tax is worked out once a year on that year's gains. Equity: long-term after 12 months at the equity long-term rate on gains above the yearly exemption, short-term at the equity short-term rate. Debt funds bought after 1 April 2023: your slab rate, however long held. Other (hybrid, gold, international): long-term after 24 months at the other long-term rate with no exemption, short-term at your slab rate. Cess is added to the special rates; your slab rate already includes it. Losses within a category offset gains in that category only.</li>
+      <li>The ₹1.25 lakh equity exemption is shared across all your equity gains in a year, including REIT and listed-share gains. If you use it elsewhere, lower it here.</li>
+      <li>Tax is paid out of that year's withdrawals. In years with no withdrawals (for example while de-risking), it's paid by selling from the portfolio early the next year.</li>
+      <li>Fixed-amount withdrawals are set in today's money and step up once a year. A %-of-corpus withdrawal is recalculated at the start of each year. "Spread over N years" sells an equal share of what's left each month so the corpus reaches zero at the end of the period.</li>
+      <li>De-risking moves the equity share in a straight line from your starting mix to the target over the glide years, by rebalancing at the start of each year. Selling to rebalance realises gains and is taxed. It needs at least one non-equity holding.</li>
+      <li>The sustainable withdrawal is the largest fixed monthly amount, in today's money and following your yearly-increase setting, that lasts until the end of the horizon under these assumptions.</li>
+      <li>Returns on money (XIRR) treat SIPs as money in, after-tax withdrawals as money out, and the final corpus after exit tax as the last inflow.</li>
+      <li>Not modelled: exit loads (usually only in the first year), stamp duty on purchases (0.005%), TDS timing, surcharge on gains, and market ups and downs. Real markets don't return a smooth average; a crash just before withdrawals start hurts far more than the averages suggest.</li>
+    </ul>
+  </details>
+  <footer>This page does arithmetic on the assumptions shown. It is not investment advice, and the return assumptions are not forecasts. Everything runs in your browser; nothing is sent anywhere.</footer>
+</main>
+</div>
+<script>
+(function(){
+"use strict";
+var HOLD=[
+  {key:"nifty",name:"Nifty 50 index fund",type:"eq",ret:10.5,ter:0.2},
+  {key:"flexi",name:"Flexi-cap fund",type:"eq",ret:11,ter:0.75},
+  {key:"mid",name:"Mid-cap fund",type:"eq",ret:12,ter:0.85},
+  {key:"debt",name:"Short-duration debt fund",type:"debt",ret:6.75,ter:0.35},
+  {key:"gold",name:"Gold ETF",type:"oth",ret:7,ter:0.5}
+];
+var PRESETS={
+  index:{w:{nifty:100,flexi:0,mid:0,debt:0,gold:0},msg:"Everything in one low-cost index fund."},
+  aggr:{w:{nifty:40,flexi:25,mid:15,debt:20,gold:0},msg:"80% equity, 20% debt. Suits a long build-up period."},
+  bal:{w:{nifty:30,flexi:20,mid:10,debt:35,gold:5},msg:"60% equity, 40% debt and gold."},
+  cons:{w:{nifty:20,flexi:10,mid:0,debt:60,gold:10},msg:"30% equity, 70% debt and gold. Steadier, lower growth."}
+};
+var DEFAULTS={lump:500000,sip:50000,stepup:5,win:20,swps:21,years:40,mode:"fixed",amt:75000,tie:true,wg:6,pct:4,spread:10,from:"prop",
+  glide:true,gy:5,geq:40,rebal:false,scen:"base",inf:6,slab:31.2,ltcg:12.5,stcg:20,exempt:125000,oltcg:12.5,cgcess:4,fd:6.5,
+  nominal:false,mixView:"mix",preset:"aggr",events:[],
+  holdings:HOLD.map(function(h){ return {key:h.key,name:h.name,type:h.type,ret:h.ret,ter:h.ter,on:true,w:PRESETS.aggr.w[h.key]}; })};
+var KEY="sip-swp-v1";
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+var S; try{ var raw=localStorage.getItem(KEY); S= raw? Object.assign(clone(DEFAULTS),JSON.parse(raw)) : clone(DEFAULTS); }catch(e){ S=clone(DEFAULTS); }
+if(!Array.isArray(S.holdings)) S=clone(DEFAULTS);
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
+
+var $=function(id){ return document.getElementById(id); };
+var nf0=new Intl.NumberFormat("en-IN",{maximumFractionDigits:0});
+function num(v,d){ var n=parseFloat(v); return isFinite(n)?n:d; }
+function rs(x){ return (x<0?"−":"")+"₹"+nf0.format(Math.abs(Math.round(x))); }
+function rsC(x){ var a=Math.abs(x), s=x<0?"−":""; if(a>=1e7) return s+"₹"+(a/1e7).toFixed(2)+" Cr"; if(a>=1e5) return s+"₹"+(a/1e5).toFixed(2)+" L"; return s+"₹"+nf0.format(Math.round(a)); }
+function pct(x,d){ return (x*100).toFixed(d==null?2:d)+"%"; }
+function inWords(x){ x=Math.round(x); if(x>=1e7) return "₹"+(x/1e7).toLocaleString("en-IN",{maximumFractionDigits:2})+" crore"; if(x>=1e5) return "₹"+(x/1e5).toLocaleString("en-IN",{maximumFractionDigits:2})+" lakh"; return x>0?"₹"+nf0.format(x):""; }
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+/* ---------- SIP → SWP engine ---------- */
+var SCEN={bear:{eq:-3,oth:-1.5,debt:-1},base:{eq:0,oth:0,debt:0},bull:{eq:2,oth:1,debt:0.5}};
+function simulate(P, amtOverride){
+  var Y=Math.max(1,Math.min(50,Math.round(num(P.years,30))));
+  var N=Y*12, W=Math.max(0,Math.min(Y,Math.round(num(P.win,15)))), WM=W*12;
+  var SS=Math.max(1,Math.min(Y,Math.round(num(P.swps,W+1)))), S0=(SS-1)*12;
+  var inf=num(P.inf,0)/100, slab=num(P.slab,0)/100, ltcg=num(P.ltcg,0)/100, stcg=num(P.stcg,0)/100, oltcg=num(P.oltcg,0)/100, cess=num(P.cgcess,0)/100, ex=Math.max(0,num(P.exempt,0));
+  var step=num(P.stepup,0)/100, lump=Math.max(0,num(P.lump,0)), sip=Math.max(0,num(P.sip,0));
+  var mode=P.mode||"fixed", amt=amtOverride!=null?amtOverride:Math.max(0,num(P.amt,0));
+  var wg=P.tie?inf:num(P.wg,0)/100, pct=num(P.pct,4)/100, spreadM=Math.max(1,Math.round(num(P.spread,10)))*12;
+  var sc=SCEN[P.scen]||SCEN.base;
+  var H=P.holdings.filter(function(h){return h.on;}).map(function(h){
+    var net=(num(h.ret,0)+sc[h.type]-num(h.ter,0))/100;
+    return {name:h.name,type:h.type,w:Math.max(0,num(h.w,0)),net:net,g:Math.pow(1+Math.max(-0.99,net),1/12),nav:1,lots:[],lp:0,gains:0,taken:0,v0:0};
+  });
+  var n=H.length, wsum=H.reduce(function(a,h){return a+h.w;},0);
+  H.forEach(function(h){ h.w = wsum>0? h.w/wsum : 1/Math.max(1,n); });
+  var E0=H.reduce(function(a,h){return a+(h.type==="eq"?h.w:0);},0);
+  var glide=!!P.glide && E0>0 && E0<1, gy=Math.max(1,Math.round(num(P.gy,5))), GS=Math.max(0,S0-gy*12), E1=Math.max(0,Math.min(100,num(P.geq,40)))/100;
+  function eqTarget(t){ if(!glide||t<GS) return E0; var f=Math.min(1,(t-GS)/(gy*12)); return E0+(E1-E0)*f; }
+  function targetW(t){
+    var E=eqTarget(t);
+    return H.map(function(h){ if(!glide) return h.w; return h.type==="eq" ? h.w*E/E0 : h.w*(1-E)/(1-E0); });
+  }
+  function val(h){ var u=0; for(var i=h.lp;i<h.lots.length;i++) u+=h.lots[i].u; return u*h.nav; }
+  function total(){ return H.reduce(function(a,h){return a+val(h);},0); }
+  var real=[], yr=0;
+  function newYear(){ return {paid:0,paidR:0,gross:0,grossR:0,evt:0,evtR:0,tax:0,taxR:0,net:0,netR:0,real:{eqLT:0,eqST:0,othLT:0,othST:0,debt:0},swpMonths:0,sipMonths:0,gw:0,grb:0,taxRb:0,taxRbR:0,start:0,end:0,endR:0,eq:0,phase:""}; }
+  var yrs=[null]; for(var k=1;k<=Y;k++) yrs.push(newYear());
+  function buy(h,amt,t){ if(amt<=0) return; h.lots.push({u:amt/h.nav,b:h.nav,t:t}); }
+  function sellFrom(h,amt,t,yi,rb){
+    var need=amt/h.nav, got=0;
+    while(need>1e-12 && h.lp<h.lots.length){
+      var l=h.lots[h.lp], q=Math.min(l.u,need), gain=q*(h.nav-l.b), age=t-l.t;
+      var R=yrs[yi].real;
+      if(h.type==="eq"){ if(age>12) R.eqLT+=gain; else R.eqST+=gain; }
+      else if(h.type==="oth"){ if(age>24) R.othLT+=gain; else R.othST+=gain; }
+      else R.debt+=gain;
+      if(rb) yrs[yi].grb+=Math.max(gain,0); else yrs[yi].gw+=Math.max(gain,0);
+      h.gains+=gain; l.u-=q; need-=q; got+=q*h.nav;
+      if(l.u<=1e-12) h.lp++;
+    }
+    h.taken+=got; return got;
+  }
+  function redeem(amt,t,yi){
+    var tot=total(); if(tot<=0||amt<=0) return 0;
+    amt=Math.min(amt,tot); var got=0;
+    if(P.from==="safe"){
+      var order=H.slice().sort(function(a,b){ var o={debt:0,oth:1,eq:2}; return o[a.type]-o[b.type]; });
+      var left=amt; order.forEach(function(h){ if(left<=0) return; var v=val(h), take=Math.min(v,left); got+=sellFrom(h,take,t,yi); left-=take; });
+    } else {
+      H.forEach(function(h){ var v=val(h); got+=sellFrom(h,amt*v/tot,t,yi); });
+    }
+    return got;
+  }
+  function taxOf(R){
+    var t1=(Math.max(R.eqLT-ex,0)*ltcg + Math.max(R.eqST,0)*stcg + Math.max(R.othLT,0)*oltcg)*(1+cess);
+    return t1 + (Math.max(R.othST,0)+Math.max(R.debt,0))*slab;
+  }
+  var contribNom=0, contribReal=0, cashNom=0, cashReal=0, flows=new Array(N+1).fill(0);
+  var pctMonthly=0, depT=null, peak=0, peakY=0, corpusS0=null, swpFirstGross=null;
+  for(var t=0;t<=N;t++){
+    var D=Math.pow(1+inf,t/12);
+    if(t%12===0 && t>0){
+      var yk=t/12, Y_=yrs[yk], v=total();
+      Y_.end=v; Y_.endR=v/D; Y_.eq = v>0 ? H.reduce(function(a,h){return a+(h.type==="eq"?val(h):0);},0)/v : 0;
+      if(v/D>peak){ peak=v/D; peakY=yk; }
+      var tax=taxOf(Y_.real); Y_.tax=tax; Y_.taxR=tax/D; var gs=Y_.gw+Y_.grb; Y_.taxRb= gs>0? tax*Y_.grb/gs : 0; Y_.taxRbR=Y_.taxRb/D;
+      flows[t]-=tax; cashNom-=tax; cashReal-=tax/D;
+      Y_.net=Y_.gross-tax; Y_.netR=Y_.grossR-tax/D;
+      if(tax>Y_.gross && t<N){ /* shortfall comes out of the portfolio next year */ var sf=tax-Y_.gross; var got=redeem(sf,t,yk+1); flows[t]+=got; cashNom+=got; cashReal+=got/D; }
+    }
+    if(t===N) break;
+    var yi=Math.floor(t/12)+1, YR=yrs[yi];
+    if(t%12===0) YR.start=total();
+    if(t===S0){ corpusS0=total(); H.forEach(function(h){ h.v0=val(h); }); }
+    if(t%12===0 && t>0 && (P.rebal || (glide && t>=GS && t<=S0))){
+      var tw=targetW(t), tot=total();
+      if(tot>0){
+        var cash=0;
+        H.forEach(function(h,i){ var over=val(h)-tw[i]*tot; if(over>1) cash+=sellFrom(h,over,t,yi,true); });
+        var under=H.map(function(h,i){ return Math.max(0,tw[i]*tot-val(h)); }), us=under.reduce(function(a,b){return a+b;},0);
+        H.forEach(function(h,i){ if(us>0) buy(h,cash*under[i]/us,t); });
+      }
+    }
+    /* contributions */
+    var own=(t<WM?sip*Math.pow(1+step,Math.floor(t/12)):0)+(t===0?lump:0);
+    if(own>0){ var tw2=targetW(t); H.forEach(function(h,i){ buy(h,own*tw2[i],t); }); contribNom+=own; contribReal+=own/D; YR.paid+=own; YR.paidR+=own/D; flows[t]-=own; if(t<WM) YR.sipMonths++; }
+    /* one-off withdrawals */
+    (P.events||[]).forEach(function(e){
+      if(!e.on) return; var ey=Math.round(num(e.year,0)); if(ey<1||ey>Y||(ey-1)*12!==t) return;
+      var g=redeem(Math.max(0,num(e.amt,0))*D,t,yi);
+      YR.evt+=g; YR.evtR+=g/D; YR.gross+=g; YR.grossR+=g/D; flows[t]+=g; cashNom+=g; cashReal+=g/D;
+    });
+    /* SWP */
+    if(t>=S0 && depT===null){
+      var tot3=total(), g=0;
+      if(mode==="fixed") g=amt*Math.pow(1+inf,S0/12)*Math.pow(1+wg,Math.floor((t-S0)/12));
+      else if(mode==="pct"){ if((t-S0)%12===0) pctMonthly=tot3*pct/12; g=pctMonthly; }
+      else if(mode==="spread"){ var M=S0+spreadM-t; g = M>0 ? tot3/M : 0; }
+      else if(mode==="once"){ g = t===S0 ? tot3 : 0; }
+      if(g>0){
+        var got2=redeem(g,t,yi);
+        if(swpFirstGross===null) swpFirstGross=got2;
+        YR.gross+=got2; YR.grossR+=got2/D; YR.swpMonths++; flows[t]+=got2; cashNom+=got2; cashReal+=got2/D;
+      }
+      if(total()<1 && t<N-1 && mode!=="once" && mode!=="spread") depT=t;
+    }
+    /* growth */
+    H.forEach(function(h){ h.nav*=h.g; });
+  }
+  /* exit valuation */
+  var V=total(), Dn=Math.pow(1+inf,Y), exR={eqLT:0,eqST:0,othLT:0,othST:0,debt:0};
+  H.forEach(function(h){ for(var i=h.lp;i<h.lots.length;i++){ var l=h.lots[i], gain=l.u*(h.nav-l.b), age=N-l.t;
+    if(h.type==="eq"){ if(age>12) exR.eqLT+=gain; else exR.eqST+=gain; } else if(h.type==="oth"){ if(age>24) exR.othLT+=gain; else exR.othST+=gain; } else exR.debt+=gain; } h.vEnd=val(h); });
+  var exitTax=taxOf(exR);
+  flows[N]+=V-exitTax;
+  /* per-year phase + withdrawal rate */
+  for(var k2=1;k2<=Y;k2++){
+    var y=yrs[k2], m0=(k2-1)*12, dep = depT!==null && m0>depT;
+    var sipOn=y.sipMonths>0, swpOn=y.swpMonths>0, gl=glide && m0+11>=GS && m0<S0;
+    y.phase = dep ? "depleted" : sipOn&&swpOn ? "both" : sipOn ? (gl?"derisk":"build") : swpOn ? "withdraw" : (gl?"derisk":"hold");
+    y.rate = y.start>0 ? y.gross/y.start : 0;
+    y.cumPaid=0;
+  }
+  var cp=0,cpr=0; for(var k3=1;k3<=Y;k3++){ cp+=yrs[k3].paid; cpr+=yrs[k3].paidR; yrs[k3].cumPaid=cp; yrs[k3].cumPaidR=cpr; }
+  return {Y:Y,W:W,SS:SS,S0:S0,N:N,D:Dn,H:H,yrs:yrs,V:V,exitTax:exitTax,contribNom:contribNom,contribReal:contribReal,cashNom:cashNom,cashReal:cashReal,
+    net:(V-exitTax)/Dn+cashReal-contribReal, corpusS0:corpusS0, corpusS0R:corpusS0!=null?corpusS0/Math.pow(1+inf,S0/12):0, swpFirstGross:swpFirstGross,
+    depT:depT, peak:peak, peakY:peakY, flows:flows, glide:glide, GS:GS, E0:E0, inf:inf};
+}
+function irr(flows){
+  function npv(r){ var s=0,d=1; for(var i=0;i<flows.length;i++){ s+=flows[i]/d; d*=1+r; } return s; }
+  var lo=-0.05, hi=0.05, flo=npv(lo), fhi=npv(hi);
+  if(!isFinite(flo)||!isFinite(fhi)||flo*fhi>0) return null;
+  for(var i=0;i<80;i++){ var m=(lo+hi)/2, fm=npv(m); if(fm*flo>0){ lo=m; flo=fm; } else hi=m; }
+  return Math.pow(1+(lo+hi)/2,12)-1;
+}
+function sustainable(P){
+  if(num(P.swps,1)>num(P.years,1)) return null;
+  var lo=0, hi=1e5; var Q=Object.assign({},P,{mode:"fixed",events:P.events});
+  for(var j=0;j<20 && simulate(Q,hi).depT===null;j++) hi*=2;
+  for(var i=0;i<26;i++){ var m=(lo+hi)/2, r=simulate(Q,m); if(r.depT===null && r.V>0) lo=m; else hi=m; }
+  return lo;
+}
+
+
+
+/* ---------- theme ---------- */
+function isDark(){ var cur=document.documentElement.getAttribute("data-theme"); return cur ? cur==="dark" : window.matchMedia("(prefers-color-scheme: dark)").matches; }
+var SUN='<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+var MOON='<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+function syncTheme(){ var d=isDark(); $("theme").innerHTML=d?SUN:MOON; $("theme").setAttribute("aria-label",d?"Switch to light theme":"Switch to dark theme"); }
+$("theme").onclick=function(){ var next=isDark()?"light":"dark"; document.documentElement.setAttribute("data-theme",next); try{ localStorage.setItem("reit-sim-theme",next); }catch(e){} syncTheme(); drawCharts(LAST); };
+try{ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){ syncTheme(); drawCharts(LAST); }); }catch(e){}
+syncTheme();
+
+/* ---------- steppers + sliders ---------- */
+var UP='<svg viewBox="0 0 8 5" aria-hidden="true"><polyline points="1,4 4,1 7,4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+var DN='<svg viewBox="0 0 8 5" aria-hidden="true"><polyline points="1,1 4,4 7,1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function nudge(el,dir){
+  if(el.disabled) return;
+  var isMoney=el.classList.contains("money"), st=num(el.dataset.step||el.step,1); if(!(st>0)) st=1;
+  var cur=num(String(el.value).replace(/,/g,""),0), nv=Math.round((cur+dir*st)/st)*st;
+  var mn=el.min!==""?num(el.min,-Infinity):(isMoney?0:-Infinity), mx=el.max!==""?num(el.max,Infinity):Infinity;
+  nv=Math.max(mn,Math.min(mx,nv)); var dec=(String(st).split(".")[1]||"").length;
+  el.value=isMoney?nf0.format(nv):nv.toFixed(dec); el.dispatchEvent(new Event("input",{bubbles:true}));
+}
+function enhance(root){
+  root.querySelectorAll('input[type=number]:not([data-nostep]),input.money').forEach(function(el){
+    if(el.parentNode.classList.contains("stp")) return;
+    var w=document.createElement("span"); w.className="stp"; el.parentNode.insertBefore(w,el); w.appendChild(el);
+    var a=document.createElement("span"); a.className="arr";
+    a.innerHTML='<button type="button" tabindex="-1" aria-label="Increase">'+UP+'</button><button type="button" tabindex="-1" aria-label="Decrease">'+DN+'</button>';
+    w.appendChild(a);
+    [[a.children[0],1],[a.children[1],-1]].forEach(function(p){
+      var timer=null, rep=null; function stop(){ clearTimeout(timer); clearInterval(rep); timer=rep=null; }
+      p[0].addEventListener("pointerdown",function(e){ e.preventDefault(); nudge(el,p[1]); timer=setTimeout(function(){ rep=setInterval(function(){ nudge(el,p[1]); },70); },380); });
+      ["pointerup","pointerleave","pointercancel"].forEach(function(ev){ p[0].addEventListener(ev,stop); });
+    });
+    if(el.classList.contains("money")) el.addEventListener("keydown",function(e){ if(e.key==="ArrowUp"||e.key==="ArrowDown"){ e.preventDefault(); nudge(el,e.key==="ArrowUp"?1:-1); } });
+  });
+  syncDisabled();
+}
+function syncDisabled(){ document.querySelectorAll(".stp").forEach(function(w){ var i=w.querySelector("input"); w.classList.toggle("dis",!!(i&&i.disabled)); }); }
+function syncRanges(){
+  document.querySelectorAll(".rng").forEach(function(r){
+    var el=$(r.dataset.for); if(!el) return; var v=num(el.value,num(r.min,0)); r.value=v;
+    var mn=num(r.min,0), mx=num(r.max,100); r.style.setProperty("--pct",Math.max(0,Math.min(100,(v-mn)/(mx-mn)*100))+"%");
+  });
+}
+document.querySelectorAll(".rng").forEach(function(r){ r.addEventListener("input",function(){ var el=$(r.dataset.for); el.value=r.value; el.dispatchEvent(new Event("input",{bubbles:true})); }); });
+
+/* ---------- money fields ---------- */
+function bindMoney(el,get,set,after){
+  el.value=nf0.format(Math.round(num(get(),0)));
+  el.oninput=function(){
+    var pos=el.selectionStart||0, before=el.value.slice(0,pos).replace(/[^0-9]/g,"").length;
+    var digits=el.value.replace(/[^0-9]/g,"").replace(/^0+(?=\d)/,"");
+    set(digits===""?0:parseInt(digits,10));
+    el.value=digits===""?"":nf0.format(parseInt(digits,10));
+    var i=0,c=0; while(i<el.value.length && c<before){ if(/[0-9]/.test(el.value[i])) c++; i++; }
+    try{ if(document.activeElement===el) el.setSelectionRange(i,i); }catch(e){}
+    if(after) after(); schedule();
+  };
+}
+function hints(){
+  $("lumpHint").textContent=inWords(num(S.lump,0));
+  $("sipHint").textContent=num(S.sip,0)>0?inWords(num(S.sip,0))+" a month":"";
+  $("amtHint").textContent=num(S.amt,0)>0?inWords(num(S.amt,0))+" a month, today's money":"";
+}
+
+/* ---------- binding ---------- */
+var scalar=["stepup","win","swps","years","wg","pct","spread","gy","geq","inf","slab","ltcg","stcg","oltcg","cgcess","fd"];
+function bindAll(){
+  ["lump","sip","amt","exempt"].forEach(function(k){ bindMoney($(k),function(){return S[k];},function(v){S[k]=v;},function(){ hints(); allocAmounts(); }); });
+  scalar.forEach(function(k){ var el=$(k); el.value=S[k]; el.oninput=function(){ S[k]=el.value; schedule(); }; });
+  ["tie","glide","rebal"].forEach(function(k){ var el=$(k); el.checked=!!S[k]; el.onchange=function(){ S[k]=el.checked; syncCond(); schedule(); }; });
+  $("mode").value=S.mode; $("mode").onchange=function(){ S.mode=this.value; syncCond(); schedule(); };
+  $("from").value=S.from; $("from").onchange=function(){ S.from=this.value; schedule(); };
+  hints(); syncCond(); syncSeg();
+  enhance(document.querySelector("aside"));
+}
+function syncCond(){
+  document.querySelectorAll(".cond[data-mode]").forEach(function(c){ c.hidden = c.dataset.mode!==S.mode; });
+  document.querySelectorAll(".cond[data-glide]").forEach(function(c){ c.hidden = !S.glide; });
+  $("wg").disabled=!!S.tie; syncDisabled();
+}
+function syncSeg(){
+  document.querySelectorAll(".presets button[data-s]").forEach(function(b){ b.setAttribute("aria-pressed",String(b.dataset.s===S.scen)); });
+  var sc=SCEN[S.scen]; $("scenNote").textContent = S.scen==="base" ? "Returns as set in the portfolio table." :
+    "Adjusts every return: equity "+(sc.eq>0?"+":"")+sc.eq+" pts, other "+(sc.oth>0?"+":"")+sc.oth+" pts, debt "+(sc.debt>0?"+":"")+sc.debt+" pts.";
+  document.querySelectorAll(".seg button[data-nom]").forEach(function(b){ b.setAttribute("aria-pressed",String((b.dataset.nom==="1")===!!S.nominal)); });
+  document.querySelectorAll(".seg button[data-mv]").forEach(function(b){ b.setAttribute("aria-pressed",String(b.dataset.mv===S.mixView)); });
+}
+document.querySelectorAll(".presets button[data-s]").forEach(function(b){ b.onclick=function(){ S.scen=b.dataset.s; syncSeg(); buildInTable(); schedule(); }; });
+document.querySelectorAll(".seg button[data-nom]").forEach(function(b){ b.onclick=function(){ S.nominal=b.dataset.nom==="1"; syncSeg(); schedule(); }; });
+document.querySelectorAll(".seg button[data-mv]").forEach(function(b){ b.onclick=function(){ S.mixView=b.dataset.mv; syncSeg(); drawCharts(LAST); save(); }; });
+document.querySelectorAll(".presets button[data-a]").forEach(function(b){ b.onclick=function(){ applyPreset(b.dataset.a); }; });
+$("reset").onclick=function(){ S=clone(DEFAULTS); bindAll(); buildEvents(); buildInTable(); schedule(); };
+$("addRow").onclick=function(){ S.holdings.push({key:"c"+Date.now(),name:"New holding",type:"eq",ret:10,ter:0.5,on:true,w:0,custom:true}); S.preset="custom"; buildInTable(); schedule(); };
+$("addEvt").onclick=function(){ if(S.events.length>=6) return; S.events.push({on:true,label:"Planned expense",year:Math.min(num(S.years,30),Math.max(2,num(S.win,10)-2)),amt:1000000}); buildEvents(); schedule(); };
+
+/* ---------- allocation ---------- */
+function applyPreset(a){
+  var p=PRESETS[a]; S.holdings.forEach(function(h){ h.w = p.w[h.key]!=null ? p.w[h.key] : 0; if(p.w[h.key]>0) h.on=true; });
+  S.preset=a; buildInTable(); schedule();
+}
+function buildAlloc(){
+  document.querySelectorAll(".presets button[data-a]").forEach(function(b){ b.setAttribute("aria-pressed",String(S.preset===b.dataset.a)); });
+  $("allocBasis").textContent = S.preset==="custom" ? "Custom split. Weights are scaled to 100% if they don't add up." : PRESETS[S.preset].msg;
+  var box=$("allocRows"); box.innerHTML="";
+  S.holdings.forEach(function(h){
+    if(!h.on) return;
+    var row=document.createElement("div"); row.className="row";
+    row.innerHTML='<label>'+esc(h.name)+'<small data-amt></small></label><input type="number" min="0" max="100" step="5" value="'+h.w+'" aria-label="Allocation to '+esc(h.name)+', percent">';
+    row.querySelector("input").oninput=function(){ h.w=this.value; S.preset="custom"; document.querySelectorAll(".presets button[data-a]").forEach(function(b){ b.setAttribute("aria-pressed","false"); }); $("allocBasis").textContent="Custom split. Weights are scaled to 100% if they don't add up."; syncTableW(h); allocAmounts(); schedule(); };
+    h._amt=row.querySelector("[data-amt]"); box.appendChild(row);
+  });
+  allocAmounts(); enhance(box);
+}
+function allocAmounts(){
+  var on=S.holdings.filter(function(h){return h.on;}), tot=on.reduce(function(a,h){return a+Math.max(0,num(h.w,0));},0);
+  var eq=0;
+  on.forEach(function(h){ var f=tot>0?Math.max(0,num(h.w,0))/tot:0; if(h.type==="eq") eq+=f; if(h._amt) h._amt.textContent=rs(num(S.lump,0)*f)+" · "+rs(num(S.sip,0)*f)+"/mo"; });
+  var el=$("allocTot"), bad=Math.abs(tot-100)>0.2; el.className="tot"+(bad?" bad":"");
+  el.innerHTML="<span>Total · equity "+pct(eq,0)+"</span><span>"+tot.toFixed(1)+"%"+(bad?" (scaled)":"")+"</span>";
+}
+function syncTableW(h){ var i=S.holdings.indexOf(h), inp=document.querySelector('#inTable tbody tr[data-i="'+i+'"] input[data-k="w"]'); if(inp) inp.value=h.w; }
+
+/* ---------- one-off withdrawals ---------- */
+function buildEvents(){
+  var box=$("evtRows"); box.innerHTML="";
+  S.events.forEach(function(e,i){
+    var d=document.createElement("div"); d.className="evt";
+    d.innerHTML='<div class="evt-top"><label class="check" style="margin:0"><input type="checkbox" data-k="on"'+(e.on?" checked":"")+' aria-label="Use this withdrawal"></label><input type="text" class="evt-name" data-k="label" value="'+esc(e.label)+'" aria-label="What it is for"><button type="button" class="evt-x" aria-label="Remove">×</button></div>'+
+      '<div class="evt-grid"><label>Year<input type="number" min="1" max="50" step="1" data-k="year" value="'+e.year+'"></label><label>Amount (₹, today\'s)<input class="money" data-step="100000" type="text" inputmode="numeric" data-k="amt"></label></div>';
+    d.querySelectorAll("input").forEach(function(el){
+      var k=el.dataset.k;
+      if(k==="amt"){ bindMoney(el,function(){return e.amt;},function(v){e.amt=v;}); return; }
+      el.addEventListener(el.type==="checkbox"?"change":"input",function(){ e[k]= el.type==="checkbox"?el.checked:el.value; d.classList.toggle("off",!e.on); schedule(); });
+    });
+    d.classList.toggle("off",!e.on);
+    d.querySelector(".evt-x").onclick=function(){ S.events.splice(i,1); buildEvents(); schedule(); };
+    box.appendChild(d);
+  });
+  $("addEvt").disabled=S.events.length>=6;
+  enhance(box);
+}
+
+/* ---------- holdings table ---------- */
+var TYPES={eq:"Equity",debt:"Debt",oth:"Other"};
+function buildInTable(){
+  var tb=$("inTable").querySelector("tbody"); tb.innerHTML="";
+  var sc=SCEN[S.scen];
+  S.holdings.forEach(function(h,i){
+    var tr=document.createElement("tr"); tr.dataset.i=i; if(!h.on) tr.className="off";
+    var netv=num(h.ret,0)+sc[h.type]-num(h.ter,0);
+    tr.innerHTML='<td><input type="checkbox" data-k="on"'+(h.on?" checked":"")+' aria-label="Include '+esc(h.name)+'"></td>'+
+      '<td><input class="name" type="text" data-k="name" value="'+esc(h.name)+'" aria-label="Name"></td>'+
+      '<td style="text-align:left"><select data-k="type" aria-label="Tax type" style="width:104px;height:28px">'+Object.keys(TYPES).map(function(t){return '<option value="'+t+'"'+(t===h.type?" selected":"")+'>'+TYPES[t]+'</option>';}).join("")+'</select></td>'+
+      '<td><input type="number" step="5" min="0" max="100" data-k="w" value="'+h.w+'" aria-label="Allocation percent"></td>'+
+      '<td><input type="number" step="0.25" data-k="ret" value="'+h.ret+'" aria-label="Return before costs"></td>'+
+      '<td><input type="number" step="0.05" min="0" data-k="ter" value="'+h.ter+'" aria-label="Expense ratio"></td>'+
+      '<td data-net>'+netv.toFixed(2)+'%</td>'+
+      '<td>'+(h.custom?'<button type="button" data-del>Remove</button>':'')+'</td>';
+    tr.querySelectorAll("input,select").forEach(function(el){
+      var k=el.dataset.k;
+      el.addEventListener(el.type==="checkbox"||el.tagName==="SELECT"?"change":"input",function(){
+        h[k]= el.type==="checkbox"?el.checked:el.value;
+        if(k==="w"){ S.preset="custom"; }
+        if(k==="on"||k==="name"||k==="w"||k==="type") buildAlloc();
+        if(k==="on") tr.className=h.on?"":"off";
+        var nv=num(h.ret,0)+SCEN[S.scen][h.type]-num(h.ter,0); tr.querySelector("[data-net]").textContent=nv.toFixed(2)+"%";
+        schedule();
+      });
+    });
+    var del=tr.querySelector("[data-del]"); if(del) del.onclick=function(){ S.holdings.splice(i,1); buildInTable(); schedule(); };
+    tb.appendChild(tr);
+  });
+  buildAlloc();
+}
+
+/* ---------- render ---------- */
+var LAST=null, pending=null, susTimer=null, SUS=null, SUSKEY="";
+function schedule(){ if(pending) return; pending=requestAnimationFrame(function(){ pending=null; run(); }); }
+function P(){ var p=clone(S); p.holdings=S.holdings.map(function(h){ return {name:h.name,type:h.type,w:h.w,ret:h.ret,ter:h.ter,on:h.on}; }); return p; }
+var PH={build:"Building",both:"Building + withdrawing",derisk:"De-risking",withdraw:"Withdrawing",hold:"Holding",depleted:"Depleted"};
+var PHC={build:"contrib",both:"harvest",derisk:"self",withdraw:"harvest",hold:"hold",depleted:"bad"};
+function run(){
+  save(); syncRanges(); hints();
+  var p=P(), r=simulate(p); LAST=r;
+  var on=S.holdings.filter(function(h){return h.on;});
+  renderTicker();
+  if(!on.length){ $("lead").textContent="Include at least one holding in the portfolio table to see results."; return; }
+  var nom=!!S.nominal, unit=nom?"future rupees":"today's rupees", inf=r.inf;
+  function dd(y){ return nom?1:Math.pow(1+inf,y); }
+  var Y=r.Y, SS=r.SS, y1=r.yrs[SS];
+  var k=JSON.stringify(p); if(k!==SUSKEY){ SUSKEY=k; SUS=undefined; clearTimeout(susTimer); susTimer=setTimeout(function(){ SUS=sustainable(p); renderSus(r); },140); }
+  $("eyebrow").textContent=Y+"-year plan · "+unit;
+  $("cbarTtl").textContent="Plan · "+Y+" years";
+  var lastY = r.depT!==null ? Math.floor(r.depT/12)+1 : null;
+  var modeTxt={fixed:"Withdrawing <strong>"+rs(num(S.amt,0))+" a month</strong> in today's money",pct:"Withdrawing <strong>"+num(S.pct,0)+"% of the corpus a year</strong>",spread:"Spreading withdrawals over <strong>"+num(S.spread,0)+" years</strong>",once:"Taking <strong>everything out in year "+SS+"</strong>"}[S.mode];
+  var outcome = S.mode==="once" ? " pays <em>"+rsC(nom?y1.net:y1.netR)+" after tax</em>." :
+     lastY ? " runs the money out in <strong>year "+lastY+"</strong>, before the "+Y+"-year horizon." :
+     " lasts the full horizon and leaves <strong>"+rsC(r.V/dd(Y))+"</strong>.";
+  $("lead").innerHTML="You put in <strong>"+rsC(r.contribNom)+"</strong> ("+rsC(r.contribReal)+" in today's money). The corpus peaks at <strong>"+rsC(r.peak)+"</strong> in today's money in year "+r.peakY+". "+modeTxt+(S.mode==="once"?",":", starting year "+SS+",")+outcome;
+  /* column 1 */
+  var s0 = r.corpusS0||0, s0v = nom? s0 : r.corpusS0R;
+  $("r1").textContent="You invest "+rs(num(S.lump,0))+" upfront and "+rs(num(S.sip,0))+" a month for "+r.W+" years"+(num(S.stepup,0)>0?", stepping up "+num(S.stepup,0)+"% a year.":".");
+  $("v1").textContent=rsC(s0v); $("u1").textContent="Corpus when withdrawals start, year "+SS+", "+unit;
+  var paidBy=0,paidByR=0; for(var i=1;i<SS;i++){ paidBy+=r.yrs[i].paid; paidByR+=r.yrs[i].paidR; }
+  $("k1").innerHTML=kv([["Money you put in",rsC(r.contribNom)],["…in today's rupees",rsC(r.contribReal)],sep(),["Put in before withdrawals",rsC(nom?paidBy:paidByR)],["Growth by then",rsC(nom?s0-paidBy:r.corpusS0R-paidByR)],["Peak corpus, today's ₹",rsC(r.peak)+" · yr "+r.peakY],["Equity share, year "+SS,pct(r.yrs[SS].eq,0)]]);
+  /* column 2 */
+  var rule2={fixed:rs(num(S.amt,0))+" a month in today's money"+(S.tie?", rising with inflation":", rising "+num(S.wg,0)+"% a year")+", from year "+SS+".",pct:num(S.pct,0)+"% of the corpus a year, reset each year, from year "+SS+".",spread:"An equal share of what's left each month, emptying the corpus over "+num(S.spread,0)+" years from year "+SS+".",once:"The whole corpus is sold at the start of year "+SS+"."}[S.mode];
+  $("r2").textContent=rule2+(S.from==="safe"?" Safest holdings sold first.":"");
+  var grossAll=0,taxAll=0,taxW=0,evtR=0; for(var j=1;j<=Y;j++){ grossAll+=r.yrs[j].gross; taxAll+=r.yrs[j].tax; taxW+=r.yrs[j].tax-r.yrs[j].taxRb; evtR+=r.yrs[j].evtR; }
+  var rb1=(nom?y1.taxRb:y1.taxRbR)/(S.mode==="once"?1:12);
+  var dv=S.mode==="once"?1:12;
+  var net1=(nom?y1.net:y1.netR)/dv, gross1=(nom?y1.gross:y1.grossR)/dv, tax1=(nom?y1.tax:y1.taxR)/dv;
+  $("v2").textContent=S.mode==="once"?rsC(net1):rs(net1);
+  $("u2").textContent=S.mode==="once"?"After tax, year "+SS+", "+unit:"After tax a month, year "+SS+", "+unit;
+  $("k2").innerHTML=kv([[S.mode==="once"?"Before tax":"Before tax a month",S.mode==="once"?rsC(gross1):rs(gross1)],[S.mode==="once"?"Tax":"Tax a month",S.mode==="once"?rsC(tax1):rs(tax1)],["…of which on rebalancing",rb1>0.5?(S.mode==="once"?rsC(rb1):rs(rb1)):"–"],["Withdrawal rate, first year",y1.start>0?pct(y1.rate,1):"–"],sep(),["Cash you took after tax, today's ₹",rsC(r.cashReal)],["…of which one-off, today's ₹",rsC(evtR)],["Tax on gains, whole plan",rsC(taxAll)],["Tax per ₹100 withdrawn",grossAll>0?"₹"+(taxW/grossAll*100).toFixed(1):"–"],["Tax on rebalancing, whole plan",rsC(taxAll-taxW)]]);
+  var b2=$("b2Badge"); b2.hidden=false;
+  if(S.mode==="once"||S.mode==="spread"){ b2.className="badge"; b2.textContent= S.mode==="once"?"One-time exit":"Planned to empty"; }
+  else if(lastY){ b2.className="badge bad"; b2.textContent="Runs out in year "+lastY; }
+  else { b2.className="badge"; b2.textContent="Lasts "+Y+" years"; }
+  renderSus(r);
+  /* column 3 */
+  var ir=irr(r.flows);
+  $("r3").textContent="Where the plan ends up at year "+Y+", and what your money earned overall after tax.";
+  $("v3").textContent=rsC(r.V/dd(Y)); $("u3").textContent="Corpus left at year "+Y+", "+unit;
+  $("k3").innerHTML=kv([["Value if sold, after tax",rsC((r.V-r.exitTax)/dd(Y))],["Net result, today's ₹",rsC(r.net)],sep(),["Return on your money (XIRR)",ir==null?"–":pct(ir,1)],["…after inflation",ir==null?"–":pct((1+ir)/(1+inf)-1,1)],sep(),["Gains tax if sold",rsC(r.exitTax/dd(Y))]]);
+  /* stats */
+  var fdM=r.corpusS0R*num(S.fd,0)/100*(1-num(S.slab,0)/100)/12;
+  $("stats").innerHTML=
+    stat(true,S.mode==="once"?"After tax, year "+SS:"After-tax withdrawal a month, year "+SS,S.mode==="once"?rsC(net1):rs(net1),(S.mode==="once"?rsC(gross1):rs(gross1))+" before tax, "+unit)+
+    stat(true,"Tax per ₹100 withdrawn, year "+SS,y1.gross>0?"₹"+((y1.tax-y1.taxRb)/y1.gross*100).toFixed(1):"–","only the gain inside each sale is taxed"+(y1.taxRb>1?"; excludes tax on rebalancing":""))+
+    '<div class="stat" id="susStat"></div>'+
+    stat(false,"FD interest on the same corpus",rs(fdM),"a month after tax, today's ₹, at "+num(S.fd,0)+"%");
+  renderSus(r);
+  /* milestones */
+  var ys=[]; for(var m=SS;m<=Y;m+=5) ys.push(m); if(ys[ys.length-1]!==Y) ys.push(Y);
+  $("mileTable").querySelector("thead").innerHTML="<tr><th>Year</th><th style='text-align:left'>Phase</th><th>Corpus</th><th>Withdrawn / mo</th><th>Tax / mo</th><th>After tax / mo</th><th>Withdrawal rate</th><th>Equity share</th></tr>";
+  $("mileTable").querySelector("tbody").innerHTML=ys.map(function(y){ var x=r.yrs[y], D=nom?1:Math.pow(1+inf,y);
+    var g=nom?x.gross:x.grossR, tx=nom?x.tax:x.taxR, nt=nom?x.net:x.netR;
+    return "<tr><td>"+y+(y===SS?" · start":y===Y?" · end":"")+"</td><td style='text-align:left'>"+pill(x.phase)+"</td><td>"+rsC(x.end/D)+"</td>"+m0(g/12)+m0(tx/12)+m0(nt/12,"strong")+"<td>"+(x.start>0&&x.gross>0?pct(x.rate,1):"–")+"</td><td>"+pct(x.eq,0)+"</td></tr>"; }).join("");
+  $("mileNote").textContent="Monthly figures are the year's totals ÷ 12, in "+unit+". Withdrawal rate is the year's withdrawals over the corpus at the start of that year. Corpus is at year end.";
+  renderYby(r,nom,unit);
+  renderResults(r,nom,unit);
+  drawCharts(r);
+}
+function renderSus(r){
+  var el=$("susStat"); var f2=$("f2");
+  var txt = SUS===undefined ? "…" : SUS==null ? "–" : rs(SUS);
+  if(el) el.className="stat", el.innerHTML='<div class="lbl">Sustainable withdrawal to year '+r.Y+'</div><div class="num">'+txt+'</div><div class="sub">a month before tax, today\'s ₹, '+(S.tie?"rising with inflation":"rising "+num(S.wg,0)+"% a year")+'</div>';
+  if(f2) f2.innerHTML = (SUS>0) ? '<span class="flag">Sustainable: '+rs(SUS)+' a month to year '+r.Y+'</span>' : "";
+}
+function kv(rows){ return rows.map(function(x){ return x===null?"<i class=sep></i>":"<span>"+x[0]+"</span><span>"+x[1]+"</span>"; }).join(""); }
+function sep(){ return null; }
+function stat(hl,l,v,s){ return '<div class="stat'+(hl?" hl":"")+'"><div class="lbl">'+l+'</div><div class="num">'+v+'</div><div class="sub">'+s+'</div></div>'; }
+function pill(ph){ return "<span class='pill "+PHC[ph]+"'>"+PH[ph]+"</span>"; }
+function m0(x,cls){ var z=Math.abs(x)<0.5; return "<td class='"+(z?"zero ":"")+(cls||"")+"'>"+(z?"–":rs(x))+"</td>"; }
+function renderTicker(){
+  var on=S.holdings.filter(function(h){return h.on;}), tot=on.reduce(function(a,h){return a+Math.max(0,num(h.w,0));},0), sc=SCEN[S.scen];
+  $("ticker").innerHTML='<span class="lab">Assumptions · '+S.scen+' case</span>'+on.map(function(h){
+    var nv=num(h.ret,0)+sc[h.type]-num(h.ter,0), w=tot>0?Math.max(0,num(h.w,0))/tot:0;
+    return '<div class="it"><span>'+esc(h.name)+'</span><b>'+pct(w,0)+'</b><i>'+nv.toFixed(2)+'% net</i></div>';
+  }).join("");
+}
+function renderYby(r,nom,unit){
+  var hd=["Year","Phase","Paid in","Paid in to date","Withdrawn","One-off","Tax","After tax","After tax / mo","Corpus, future ₹","Corpus, today's ₹","Equity share","Withdrawal rate"];
+  $("ybyTable").querySelector("thead").innerHTML="<tr>"+hd.map(function(h,i){return "<th"+(i===1?" style='text-align:left'":"")+">"+h+"</th>";}).join("")+"</tr>";
+  var rows=""; for(var y=1;y<=r.Y;y++){ var x=r.yrs[y];
+    var f=nom?{p:x.paid,c:x.cumPaid,g:x.gross,e:x.evt,t:x.tax,n:x.net}:{p:x.paidR,c:x.cumPaidR,g:x.grossR,e:x.evtR,t:x.taxR,n:x.netR};
+    var cls=(y===r.W&&r.W<r.Y?"winend ":"")+(y===r.SS?"hl":"");
+    rows+="<tr class='"+cls+"'><td>"+y+"</td><td style='text-align:left'>"+pill(x.phase)+"</td>"+m0(f.p)+m0(f.c)+m0(f.g)+m0(f.e)+m0(f.t)+m0(f.n)+m0(f.n/12,"strong")+
+      "<td>"+rsC(x.end)+"</td><td>"+rsC(x.endR)+"</td><td>"+pct(x.eq,0)+"</td><td>"+(x.start>0&&x.gross>0?pct(x.rate,1):"–")+"</td></tr>"; }
+  $("ybyTable").querySelector("tbody").innerHTML=rows;
+  $("ybyNote").textContent="Money figures in "+unit+" unless the column says otherwise"+(nom?"":", each amount converted at the month it happened")+". The shaded row is the first year of withdrawals; the line marks the last year of the SIP. Tax is on that year's gains and comes out of that year's withdrawals.";
+}
+function renderResults(r,nom,unit){
+  var sc=SCEN[S.scen], D0=nom?1:Math.pow(1+r.inf,r.S0/12), DY=nom?1:r.D;
+  $("outTable").querySelector("thead").innerHTML="<tr><th>Holding</th><th>Tax type</th><th>Allocation</th><th>Net return</th><th class=grp>Value at year "+r.SS+"</th><th>Value at year "+r.Y+"</th><th class=grp>Gains realised</th><th>Sold over the plan</th></tr>";
+  var tv0=0,tvE=0,tg=0,tt=0;
+  $("outTable").querySelector("tbody").innerHTML=r.H.map(function(h){ tv0+=h.v0||0; tvE+=h.vEnd||0; tg+=h.gains; tt+=h.taken;
+    return "<tr><td>"+esc(h.name)+"</td><td>"+TYPES[h.type]+"</td><td>"+pct(h.w,1)+"</td><td>"+pct(h.net,2)+"</td><td class=grp>"+rsC((h.v0||0)/D0)+"</td><td>"+rsC((h.vEnd||0)/DY)+"</td><td class=grp>"+rsC(h.gains)+"</td><td>"+rsC(h.taken)+"</td></tr>"; }).join("");
+  $("outTable").querySelector("tfoot").innerHTML="<tr><td>Total</td><td></td><td>100%</td><td></td><td class=grp>"+rsC(tv0/D0)+"</td><td>"+rsC(tvE/DY)+"</td><td class=grp>"+rsC(tg)+"</td><td>"+rsC(tt)+"</td></tr>";
+  $("resNote").textContent="Values in "+unit+". Gains realised and amounts sold are in future rupees and include selling to rebalance or de-risk.";
+}
+var charts={};
+function drawCharts(r){
+  if(!r||typeof Chart==="undefined") return;
+  Chart.defaults.font.family=css("--num"); Chart.defaults.font.size=11;
+  var nom=!!S.nominal, ink=css("--ink2"), muted=css("--muted"), rule=css("--rule"), A=css("--accent"), G=css("--line2"), B=css("--s3");
+  var labels=[], cv=[], cp=[], cc=[], sipM=[], netM=[], taxM=[], eq=[], taxY=[], cum=0, cumR=0;
+  for(var y=1;y<=r.Y;y++){ var x=r.yrs[y]; labels.push("Yr "+y);
+    cum+=x.net; cumR+=x.netR;
+    cv.push(nom?x.end:x.endR); cp.push(nom?x.cumPaid:x.cumPaidR); cc.push(nom?cum:cumR);
+    var lumpAdj = y===1 ? num(S.lump,0) : 0;
+    sipM.push(((nom?x.paid:x.paidR)-lumpAdj)/12); netM.push((nom?x.net:x.netR)/12); taxM.push((nom?x.tax:x.taxR)/12);
+    eq.push(x.eq*100); taxY.push(nom?x.tax:x.taxR); }
+  function ds(label,data,col,w,dash){ return {label:label,data:data,borderColor:col,backgroundColor:col,pointRadius:0,borderWidth:w,tension:.15,borderDash:dash||[]}; }
+  function opts(fmt,max){ return {responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{align:"end",labels:{color:ink,boxWidth:14,boxHeight:2,font:{family:css("--ui"),size:11.5}}},tooltip:{callbacks:{label:function(c){return c.dataset.label+": "+fmt(c.parsed.y);}}}},
+    scales:{x:{ticks:{color:muted,maxTicksLimit:12},grid:{color:rule}},y:{ticks:{color:muted,callback:function(v){return fmt(v);}},grid:{color:rule},beginAtZero:true,max:max}}}; }
+  var sets=[
+    ["chValue",[ds("Corpus",cv,A,2.5),ds("Money put in to date",cp,G,1.75),ds("Cash taken to date, after tax",cc,B,1.75,[5,4])],rsC],
+    ["chFlow",[ds("SIP paid",sipM,G,1.75),ds("Withdrawn after tax",netM,A,2.5),ds("Tax",taxM,B,1.75,[5,4])],rs],
+    ["chMix", S.mixView==="tax" ? [ds("Tax on gains",taxY,B,2)] : [ds("Equity share",eq,A,2.25)], S.mixView==="tax"?rsC:function(v){return Math.round(v)+"%";}, S.mixView==="tax"?undefined:100]
+  ];
+  $("hValue").textContent="Corpus, "+(nom?"future ₹":"today's ₹")+" (SIP ends year "+r.W+", withdrawals start year "+r.SS+")";
+  $("hMix").textContent=S.mixView==="tax"?"Tax each year":"Portfolio mix";
+  sets.forEach(function(s){ if(charts[s[0]]) charts[s[0]].destroy(); charts[s[0]]=new Chart($(s[0]),{type:"line",data:{labels:labels,datasets:s[1]},options:opts(s[2],s[3])}); });
+}
+
+bindAll(); buildEvents(); buildInTable(); run();
+})();
+</script>
+</body>
+</html>
