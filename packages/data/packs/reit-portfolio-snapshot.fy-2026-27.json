@@ -1,0 +1,63 @@
+{
+  "id": "reit-portfolio-snapshot",
+  "asOf": "2026-09-30",
+  "jurisdiction": "IN",
+  "provenance": {
+    "sourceType": "user_supplied",
+    "source": "Figures supplied directly by the user via a hand-built REIT income simulator prototype (reit-simulator.html, saved as a project doc), ported verbatim into this pack for the REIT Portfolio Builder rebuild.",
+    "suppliedOn": "2026-09-30",
+    "note": "Price, distribution yield and component-split figures are a point-in-time snapshot circa September 2026 (last two quarterly payouts as of collection: Q4 FY26 and Q1 FY27, plus recent unit prices) — a separate snapshot from, and not reconciled against, reit-instruments.json's own differently-dated figures; see this pack's schema module doc comment (reit-portfolio-snapshot.ts) for why they're kept apart. Component splits reflect each REIT's last disclosed quarter where published; where a Q4 FY26 split specifically wasn't published, the nearest available quarter's split was used instead as a proxy. Which of the five rows below are proxies in that sense is not separately recorded in the source prototype, so every row's split should be treated as a potential proxy unless independently reconciled against each trust's own investor-relations filings or BSE/NSE disclosures. Price CAGR since listing is unverified for every REIT except Embassy — see each row's own priceCagrVerified field. Surface both caveats in the REIT Portfolio Builder's Assumptions panel, not silently."
+  },
+  "reits": [
+    {
+      "id": "embassy",
+      "name": "Embassy",
+      "priceInr": 437.66,
+      "distributionYieldPct": 5.85,
+      "componentSplit": { "interestPct": 6.4, "dividendPct": 18.5, "returnOfCapitalPct": 75.1 },
+      "priceCagrSinceListingPct": 5.2,
+      "priceCagrVerified": true,
+      "defaultAllocationWeightPct": 20
+    },
+    {
+      "id": "mindspace",
+      "name": "Mindspace",
+      "priceInr": 498,
+      "distributionYieldPct": 5.35,
+      "componentSplit": { "interestPct": 0, "dividendPct": 50.1, "returnOfCapitalPct": 49.9 },
+      "priceCagrSinceListingPct": 10.2,
+      "priceCagrVerified": false,
+      "defaultAllocationWeightPct": 20
+    },
+    {
+      "id": "brookfield",
+      "name": "Brookfield",
+      "priceInr": 341.5,
+      "distributionYieldPct": 6.50,
+      "componentSplit": { "interestPct": 42.2, "dividendPct": 16.5, "returnOfCapitalPct": 41.3 },
+      "priceCagrSinceListingPct": 3.9,
+      "priceCagrVerified": false,
+      "defaultAllocationWeightPct": 20
+    },
+    {
+      "id": "nexus",
+      "name": "Nexus Select",
+      "priceInr": 166.2,
+      "distributionYieldPct": 5.69,
+      "componentSplit": { "interestPct": 42.7, "dividendPct": 35.3, "returnOfCapitalPct": 22.0 },
+      "priceCagrSinceListingPct": 16.4,
+      "priceCagrVerified": false,
+      "defaultAllocationWeightPct": 20
+    },
+    {
+      "id": "knowledge-realty",
+      "name": "Knowledge Realty",
+      "priceInr": 113.45,
+      "distributionYieldPct": 5.84,
+      "componentSplit": { "interestPct": 14.7, "dividendPct": 57.5, "returnOfCapitalPct": 27.8 },
+      "priceCagrSinceListingPct": 12.2,
+      "priceCagrVerified": false,
+      "defaultAllocationWeightPct": 20
+    }
+  ]
+}

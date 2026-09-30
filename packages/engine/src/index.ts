@@ -7,6 +7,8 @@ export * from './xirr';
 export * from './inflation';
 export * from './tax';
 export * from './positions';
+export * from './reit-portfolio-simulator';
+export * from './rental-yield-comparison';
 export * from './comparator';
 
 /** Bumped when the engine's numeric behaviour changes, so exported CSVs and shared URLs can say which engine produced them. */

@@ -10,6 +10,10 @@ import {
   getReitDistributionRules,
   getReitInstrument,
   getReitInstruments,
+  getReitPortfolioSnapshot,
+  getReitPortfolioSnapshotAsOf,
+  getReitPortfolioSnapshotCaveat,
+  getReitPortfolioSnapshotRow,
   getRulePack,
   getStampDutyRules,
   latestReitDistributionRecord,
@@ -280,5 +284,37 @@ describe('@fincalc/data REIT reference packs (reit-instruments, reit-distributio
     const history = getReitDistributionHistory();
     expect(latestReitDistributionRecord(history, 'embassy').date).toBe('2026-08-03');
     expect(latestReitDistributionRecord(history, 'knowledge-realty').date).toBe('2026-08-28');
+  });
+});
+
+describe('@fincalc/data REIT Portfolio Builder snapshot (reit-portfolio-snapshot — user-supplied, not FY-scoped, kept separate from reit-instruments.json)', () => {
+  it('getReitPortfolioSnapshot ships exactly 5 rows, each with a non-https user_supplied provenance', () => {
+    const rows = getReitPortfolioSnapshot();
+    expect(rows).toHaveLength(5);
+    expect(rows.map((r) => r.id)).toEqual([...REIT_IDS]);
+  });
+
+  it('getReitPortfolioSnapshotRow resolves a single REIT and throws for an unknown id', () => {
+    expect(getReitPortfolioSnapshotRow('embassy').priceInr).toBeCloseTo(437.66);
+    expect(getReitPortfolioSnapshotRow('nexus').name).toBe('Nexus Select');
+    expect(() => getReitPortfolioSnapshotRow('not-a-reit')).toThrow(RangeError);
+  });
+
+  it("every row's component split sums to ~100", () => {
+    for (const row of getReitPortfolioSnapshot()) {
+      const sum = row.componentSplit.interestPct + row.componentSplit.dividendPct + row.componentSplit.returnOfCapitalPct;
+      expect(sum).toBeCloseTo(100, 0);
+    }
+  });
+
+  it("priceCagrVerified is true only for Embassy, per the brief's own flag (\"unverified except Embassy's\")", () => {
+    const rows = getReitPortfolioSnapshot();
+    const verified = rows.filter((r) => r.priceCagrVerified).map((r) => r.id);
+    expect(verified).toEqual(['embassy']);
+  });
+
+  it('getReitPortfolioSnapshotAsOf and getReitPortfolioSnapshotCaveat expose the snapshot date and the proxy-split/unverified-CAGR caveat', () => {
+    expect(getReitPortfolioSnapshotAsOf()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(getReitPortfolioSnapshotCaveat()).toMatch(/proxy/i);
   });
 });

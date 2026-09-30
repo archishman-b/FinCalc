@@ -1,421 +1,1092 @@
-import { useMemo, useState } from 'react';
-
-import { deflateToToday } from '@fincalc/engine';
-import { getReitInstruments, getReitInstrumentsAsOf } from '@fincalc/data';
-
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-  buildReitPortfolio,
-  defaultAssumptions,
-  equalWeights,
-  reitIndexedDistributionSeries,
-  REIT_DISPLAY,
-  REIT_IDS,
-  sumWeights,
-  weightsAreValid,
-  type ReitAssumption,
-  type ReitId,
-} from '../../lib/reit-portfolio';
-import { usePalette } from '../../lib/theme';
-import { Amount } from '../../components/Amount';
-import { CalcShell, Callout, NumberField, SubmitButton } from '../../components/CalcShell';
-import { GrowthWithIncomeChart, ReitIndexedPayoutChart } from '../../components/charts';
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+
+import { formatINR } from '@fincalc/ui';
+import { getReitPortfolioSnapshot, getReitPortfolioSnapshotAsOf, getReitPortfolioSnapshotCaveat } from '@fincalc/data';
+import {
+  letOutFlatNetYieldPct,
+  rankWeights,
+  reitPostTaxYieldPct,
+  simulateReitPortfolio,
+  type ReitPortfolioSimulationResult,
+  type ReitPortfolioSimulatorInput,
+  type ReitPortfolioSimulatorReitInput,
+  type ReitPortfolioStrategy,
+  type ReitPortfolioYearRow,
+} from '@fincalc/engine';
 
 /**
- * Tier-line module (added Sept 2026, alongside the home-page re-theme):
- * "position REITs as a mix of SIPs and buying a house" — a lumpsum and/or
- * monthly SIP deployed across a user-weighted bucket of India's 5 major
- * listed REITs, showing distribution income (the rental-yield analogue)
- * alongside NAV appreciation (the paper-gain analogue), per the brief §3
- * REIT Portfolio Builder spec. The blending itself lives in
- * lib/reit-portfolio.ts, on top of the engine's existing `reitPosition` —
- * see that Position's own doc comment for the four-component tax model,
- * already built and tested before this page existed.
+ * REIT Portfolio Builder — a full port of a hand-built single-file
+ * prototype (reit-simulator.html, saved as a project doc) the user
+ * verified separately and treated as the spec, not code to copy. This
+ * route follows its own "Graphite terminal" visual identity rather than
+ * the rest of FinCalc's paper/ink theme (Phase 5) — scoped entirely to
+ * this component via the `.reit-graphite` custom-property block below, so
+ * no other route is affected. Colour values are the prototype's own
+ * (light and dark), ported verbatim; the one deliberate departure is
+ * typography: the prototype loads Geist/Geist Mono from Google Fonts, but
+ * FinCalc's Phase 5 design plan is explicit that "nothing about the visual
+ * system makes a network request" — so this uses the same system-stack
+ * substitution (ui-sans-serif / ui-monospace) the rest of the app already
+ * uses, rather than adding the app's first external font request.
  *
- * Scope, disclosed rather than silently assumed: this shows accumulation
- * only (distributions received, NAV mark-to-market) — it does not model
- * selling the units and paying exit capital-gains tax, the same way the
- * SIP calculator shows future value without modelling redemption tax.
- * Exit CGT is real and the engine already has what it needs for it
- * (reit.ts's costBasisRemaining, capital-gains.ts's `reit` rules) — it's a
- * natural next step once this integrates with the Comparator, not missing
- * by oversight.
- *
- * The reference data (packages/data/src/reit-reference.ts) is explicit
- * that it's user-supplied and not yet cross-checked against exchange
- * filings — the Assumptions area below surfaces that rather than
- * presenting the defaults as verified fact. The same data backs the
- * collapsed "Historical REIT reference" panel in the form column: a
- * quick, non-obstructive look at each REIT's current price/yield/CAGR/PE
- * before the user commits to a weight split — tagged with its `asOf`
- * date since it's a snapshot, not a live feed (wiring that up is future
- * work, not attempted here).
- *
- * The monthly-income callout below is the module's other new surface:
- * the brief's "equate dividend yields at a point of time as somewhat
- * equivalent to rental yields" use case, made literal by averaging the
- * final year's gross distributions into a single monthly rupee figure
- * (ReitPortfolioResult.monthlyIncomeAtHorizonNominal) and then deflating
- * both it and the headline final value to today's rupees with the same
- * `deflateToToday` SipCalculator.tsx already uses — nominal and real
- * side by side, never real alone.
+ * The simulation itself is entirely `@fincalc/engine`'s
+ * `simulateReitPortfolio()` (see reit-portfolio-simulator.ts for why this
+ * doesn't reuse `reitPosition()`) — this file is presentation only: it
+ * builds the simulator's input from form state, runs all three strategies,
+ * and renders the result. Every REIT's starting price/yield/component
+ * split comes from `@fincalc/data`'s `reit-portfolio-snapshot` pack (a
+ * separate, deliberately-dated snapshot from the older `reit-instruments`
+ * pack — see that pack's own module doc comment for why).
  */
 
-const YEARS_DEFAULT = 10;
-const LUMPSUM_DEFAULT = 500_000;
-const MONTHLY_SIP_DEFAULT = 10_000;
-const INFLATION_DEFAULT_PCT = 6;
+const CSS_VARS = `
+.reit-graphite {
+  --paper:#F4F5F3; --panel:#F8F8F6; --rail:#FAFAF9; --sheet:#FFFFFF; --field:#FFFFFF;
+  --ink:#111418; --ink2:#343A42; --muted:#5A616B; --rule:#E1E3E0; --rule2:#C7CBC7;
+  --accent:#D98A00; --acctext:#935C00; --onacc:#FFFFFF; --accent-soft:#FDF3E0;
+  --warn:#B86A00; --warn-soft:#FCF1DE; --line2:#8A929E; --s3:#1F6FD1;
+  --p1bg:#E3F1EB; --p1fg:#0B5A43; --p2bg:#E4EEFB; --p2fg:#1756A5; --p3bg:#FCEFD6; --p3fg:#7A4B00; --p4bg:#EEEFEC; --p4fg:#5A616B;
+  background: var(--paper); color: var(--ink);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.reit-graphite .num { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+@media (prefers-color-scheme: dark) {
+  .reit-graphite {
+    --paper:#0B0D10; --panel:#0F1216; --rail:#0D1013; --sheet:#12151A; --field:#0E1115;
+    --ink:#ECEEF1; --ink2:#C3C9D1; --muted:#8C95A2; --rule:#232830; --rule2:#39414C;
+    --accent:#F5A524; --acctext:#F5B547; --onacc:#1A1204; --accent-soft:#2A2210;
+    --warn:#F5A524; --warn-soft:#2A2210; --line2:#7D8795; --s3:#5AB0FF;
+    --p1bg:#1C2A25; --p1fg:#8FD9BE; --p2bg:#13263A; --p2fg:#8CC8FF; --p3bg:#34270C; --p3fg:#F5C46A; --p4bg:#1B1F26; --p4fg:#8C95A2;
+  }
+}
+.reit-graphite input[type=range] { accent-color: var(--accent); }
+`;
 
-/**
- * Lumpsum, monthly SIP and inflation are all `required={false}` — clearing
- * one of those NumberFields to blank (rather than typing an explicit "0")
- * is a legitimate way to say "none", but NumberField's onChange reports
- * that blank state as `NaN`, not `0` (see CalcShell.tsx: it has to, so a
- * user can backspace through all the digits of a *required* field without
- * the value snapping back to 0 mid-edit). Left uncorrected here, that NaN
- * silently propagates through every downstream figure — the whole result
- * quietly goes blank with no error, which is what a user backspacing the
- * lumpsum to nothing (fully intending "0") actually experiences. Coerce at
- * the point of use instead of touching the shared NumberField.
- */
-function orZero(v: number): number {
-  return Number.isFinite(v) ? v : 0;
+/** Mirrors apps/web/src/lib/theme.ts's usePalette() pattern, but for this route's own Graphite hex values (charts here don't use the shared paper/ink palette — see the module doc comment above). */
+function useGraphiteChartColors() {
+  const [dark, setDark] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => setDark(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return dark
+    ? { line2: '#8A929E', accent: '#F5A524', s3: '#5AB0FF', rule: '#232830', ink2: '#C3C9D1', paper: '#12151A' }
+    : { line2: '#8A929E', accent: '#D98A00', s3: '#1F6FD1', rule: '#E1E3E0', ink2: '#343A42', paper: '#FFFFFF' };
 }
 
-export function ReitPortfolioBuilder() {
-  const palette = usePalette();
-  const [lumpsum, setLumpsum] = useState(LUMPSUM_DEFAULT);
-  const [monthlySip, setMonthlySip] = useState(MONTHLY_SIP_DEFAULT);
-  const [contributionYears, setContributionYears] = useState(YEARS_DEFAULT);
-  const [evaluationYears, setEvaluationYears] = useState(YEARS_DEFAULT);
-  const [inflationPct, setInflationPct] = useState(INFLATION_DEFAULT_PCT);
-  const [weights, setWeights] = useState<Record<ReitId, number>>(equalWeights);
-  const [assumptions, setAssumptions] = useState<Record<ReitId, ReitAssumption>>(defaultAssumptions);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedReitIds, setSelectedReitIds] = useState<ReitId[]>(() => [...REIT_IDS]);
+function rupee(v: number): string {
+  return formatINR(v, { decimals: 0 });
+}
+function rupeeCompact(v: number): string {
+  return formatINR(v, { compact: true, decimals: 2 });
+}
+function pct(v: number): string {
+  return `${v.toFixed(2)}%`;
+}
+/** Adapts a form row (which names its yield field `yieldPct`) to the shape `reitPostTaxYieldPct`/`rankWeights` expect (`distributionYieldPct`), without renaming the form field itself. */
+function toYieldInput(r: Pick<ReitRowState, 'yieldPct' | 'interestPct' | 'dividendPct' | 'returnOfCapitalPct'>): Pick<ReitPortfolioSimulatorReitInput, 'distributionYieldPct' | 'interestPct' | 'dividendPct' | 'returnOfCapitalPct'> {
+  return {
+    distributionYieldPct: r.yieldPct,
+    interestPct: r.interestPct,
+    dividendPct: r.dividendPct,
+    returnOfCapitalPct: r.returnOfCapitalPct,
+  };
+}
 
-  const weightTotal = sumWeights(weights);
-  const weightsOk = weightsAreValid(weights);
-  const contributionMonths = Math.round(contributionYears * 12);
-  const evaluationMonths = Math.round(evaluationYears * 12);
+function monthsToWords(m: number): string {
+  const y = Math.floor(m / 12);
+  const mo = m % 12;
+  const parts: string[] = [];
+  if (y) parts.push(`${y} ${y === 1 ? 'yr' : 'yrs'}`);
+  if (mo) parts.push(`${mo} mo`);
+  return `after ${m} months (${parts.join(' ')})`;
+}
 
-  const result = useMemo(() => {
-    if (!submitted || !weightsAreValid(weights)) return null;
-    return buildReitPortfolio({
-      lumpsum: orZero(lumpsum),
-      monthlySip: orZero(monthlySip),
-      months: evaluationMonths,
-      contributionMonths,
-      weights,
-      assumptions,
-    });
-  }, [submitted, lumpsum, monthlySip, evaluationMonths, contributionMonths, weights, assumptions]);
+interface ReitRowState {
+  id: string;
+  name: string;
+  on: boolean;
+  priceInr: number;
+  yieldPct: number;
+  interestPct: number;
+  dividendPct: number;
+  returnOfCapitalPct: number;
+  growthOverridePct: number | null;
+  priceCagrSinceListingPct: number | null;
+  weightPct: number;
+}
 
-  const totalTaxableOtherSources = useMemo(() => {
-    if (!result) return 0;
-    return Math.round(result.rows.reduce((s, r) => s + (r.taxable.other_sources ?? 0), 0) * 100) / 100;
-  }, [result]);
+function defaultReitRows(): ReitRowState[] {
+  return getReitPortfolioSnapshot().map((r) => ({
+    id: r.id,
+    name: r.name,
+    on: true,
+    priceInr: r.priceInr,
+    yieldPct: r.distributionYieldPct,
+    interestPct: r.componentSplit.interestPct,
+    dividendPct: r.componentSplit.dividendPct,
+    returnOfCapitalPct: r.componentSplit.returnOfCapitalPct,
+    growthOverridePct: null,
+    priceCagrSinceListingPct: r.priceCagrSinceListingPct,
+    weightPct: r.defaultAllocationWeightPct,
+  }));
+}
 
-  // Real (today's-rupees) equivalents of the two headline nominal figures —
-  // the final portfolio value, and the monthly-income-at-horizon figure the
-  // "rental yield equivalent" callout below is built around.
-  const realFinalValue = useMemo(() => {
-    if (!result) return 0;
-    return deflateToToday(result.finalValue, orZero(inflationPct) / 100, evaluationMonths);
-  }, [result, inflationPct, evaluationMonths]);
-  const monthlyIncomeAtHorizonReal = useMemo(() => {
-    if (!result) return 0;
-    return deflateToToday(result.monthlyIncomeAtHorizonNominal, orZero(inflationPct) / 100, evaluationMonths);
-  }, [result, inflationPct, evaluationMonths]);
+interface FormState {
+  reits: ReitRowState[];
+  lumpsumInr: number;
+  monthlySipInr: number;
+  sipStepUpPct: number;
+  brokeragePct: number;
+  contributionWindowYears: number;
+  horizonYears: number;
+  harvestPct: number;
+  unitPriceGrowthPct: number;
+  tieDistributionGrowthToPrice: boolean;
+  distributionGrowthPct: number;
+  inflationPct: number;
+  slabRatePct: number;
+  taxDividendComponent: boolean;
+  ltcgRatePct: number;
+  stcgRatePct: number;
+  ltcgExemptionInr: number;
+  capitalGainsCessPct: number;
+  reinvestmentSplit: 'allocation' | 'same_reit';
+  rentalGrossYieldPct: number;
+  rentalVacancyMonths: number;
+  rentalMaintenancePct: number;
+  rentalPropertyTaxPct: number;
+}
 
-  const historicalInstruments = getReitInstruments();
-  const historicalAsOf = getReitInstrumentsAsOf();
+function defaultFormState(): FormState {
+  return {
+    reits: defaultReitRows(),
+    lumpsumInr: 5_000_000,
+    monthlySipInr: 100_000,
+    sipStepUpPct: 0,
+    brokeragePct: 0,
+    contributionWindowYears: 15,
+    horizonYears: 25,
+    harvestPct: 100,
+    unitPriceGrowthPct: 3,
+    tieDistributionGrowthToPrice: true,
+    distributionGrowthPct: 3,
+    inflationPct: 6,
+    slabRatePct: 31.2,
+    taxDividendComponent: false,
+    ltcgRatePct: 12.5,
+    stcgRatePct: 20,
+    ltcgExemptionInr: 125_000,
+    capitalGainsCessPct: 4,
+    reinvestmentSplit: 'allocation',
+    rentalGrossYieldPct: 3,
+    rentalVacancyMonths: 1,
+    rentalMaintenancePct: 10,
+    rentalPropertyTaxPct: 5,
+  };
+}
 
-  // Independent of the submitted portfolio — driven only by which REIT(s) are checked below the chart, since this is a point-in-time look at each REIT's own actual disclosed history, not a blend of the form's weights.
-  const indexedData = useMemo(() => reitIndexedDistributionSeries(selectedReitIds), [selectedReitIds]);
-  const indexedSeries = useMemo(
-    () => REIT_DISPLAY.filter((r) => selectedReitIds.includes(r.id)).map((r) => ({ reitId: r.id, label: r.shortLabel, color: palette[r.colorKey] })),
-    [selectedReitIds, palette],
+function toSimulatorInput(form: FormState): ReitPortfolioSimulatorInput {
+  const reits: ReitPortfolioSimulatorReitInput[] = form.reits
+    .filter((r) => r.on)
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      priceInr: r.priceInr,
+      distributionYieldPct: r.yieldPct,
+      interestPct: r.interestPct,
+      dividendPct: r.dividendPct,
+      returnOfCapitalPct: r.returnOfCapitalPct,
+      growthOverridePct: r.growthOverridePct,
+      priceCagrSinceListingPct: r.priceCagrSinceListingPct,
+      weightPct: r.weightPct,
+    }));
+  return {
+    reits,
+    lumpsumInr: form.lumpsumInr,
+    monthlySipInr: form.monthlySipInr,
+    sipStepUpPctPerYear: form.sipStepUpPct,
+    brokeragePct: form.brokeragePct,
+    contributionWindowYears: form.contributionWindowYears,
+    horizonYears: form.horizonYears,
+    harvestPct: form.harvestPct,
+    unitPriceGrowthPct: form.unitPriceGrowthPct,
+    tieDistributionGrowthToPrice: form.tieDistributionGrowthToPrice,
+    distributionGrowthPct: form.distributionGrowthPct,
+    inflationPct: form.inflationPct,
+    slabRatePct: form.slabRatePct,
+    taxDividendComponent: form.taxDividendComponent,
+    ltcgRatePct: form.ltcgRatePct,
+    stcgRatePct: form.stcgRatePct,
+    ltcgExemptionInr: form.ltcgExemptionInr,
+    capitalGainsCessPct: form.capitalGainsCessPct,
+    reinvestmentSplit: form.reinvestmentSplit,
+  };
+}
+
+/* ---------- small local field components (Graphite-themed) ---------- */
+
+function FieldRow({ label, hint, children }: { label: string; hint?: string | undefined; children: React.ReactNode }) {
+  return (
+    <div className="mb-2.5 grid grid-cols-[minmax(0,1fr)_104px] items-center gap-2.5">
+      <label className="text-xs" style={{ color: 'var(--ink2)' }}>
+        {label}
+        {hint && <small className="mt-0.5 block text-[10.5px] leading-snug" style={{ color: 'var(--muted)' }}>{hint}</small>}
+      </label>
+      {children}
+    </div>
   );
-  function toggleReit(id: ReitId) {
-    setSelectedReitIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+}
+
+function Stepper({ value, onChange, step = 1, min, max, suffix }: { value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number; suffix?: string | undefined }) {
+  const clamp = (v: number) => Math.max(min ?? -Infinity, Math.min(max ?? Infinity, v));
+  return (
+    <div className="relative">
+      <input
+        type="number"
+        value={Number.isFinite(value) ? value : 0}
+        step={step}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(clamp(parseFloat(e.target.value) || 0))}
+        className="num h-8 w-full rounded border pr-6 text-right text-[12.5px] font-medium"
+        style={{ background: 'var(--field)', borderColor: 'var(--rule)', color: 'var(--ink)' }}
+      />
+      {suffix && (
+        <span className="pointer-events-none absolute right-7 top-1/2 -translate-y-1/2 text-[11px]" style={{ color: 'var(--muted)' }}>
+          {suffix}
+        </span>
+      )}
+      <span className="absolute right-0 top-0 flex h-full w-5 flex-col border-l" style={{ borderColor: 'var(--rule)' }}>
+        <button type="button" tabIndex={-1} onClick={() => onChange(clamp(value + step))} className="flex-1 text-[9px]" style={{ color: 'var(--muted)' }} aria-label="Increase">
+          ▲
+        </button>
+        <button type="button" tabIndex={-1} onClick={() => onChange(clamp(value - step))} className="flex-1 border-t text-[9px]" style={{ borderColor: 'var(--rule)', color: 'var(--muted)' }} aria-label="Decrease">
+          ▼
+        </button>
+      </span>
+    </div>
+  );
+}
+
+function SliderField({ label, hint, value, onChange, min, max, step, suffix }: { label: string; hint?: string; value: number; onChange: (v: number) => void; min: number; max: number; step: number; suffix?: string }) {
+  return (
+    <div className="mb-3">
+      <FieldRow label={label} hint={hint}>
+        <Stepper value={value} onChange={onChange} step={step} min={min} max={max} suffix={suffix} />
+      </FieldRow>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={Number.isFinite(value) ? value : min}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="mt-[-6px] w-full"
+      />
+      <div className="mt-0.5 flex justify-between text-[10px] num" style={{ color: 'var(--muted)' }}>
+        <span>{min}{suffix ?? ''}</span>
+        <span>{max}{suffix ?? ''}</span>
+      </div>
+    </div>
+  );
+}
+
+function Segmented<T extends string>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  return (
+    <div className="inline-flex gap-0.5 rounded-lg border p-0.5" style={{ background: 'var(--panel)', borderColor: 'var(--rule)' }}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          className="rounded px-2.5 py-1 text-xs font-medium"
+          style={value === o.value ? { background: 'var(--sheet)', color: 'var(--ink)', boxShadow: '0 1px 2px rgba(17,20,24,.08)' } : { color: 'var(--muted)' }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-lg border p-5 ${className}`} style={{ background: 'var(--sheet)', borderColor: 'var(--rule)', boxShadow: '0 1px 2px rgba(17,20,24,.04)' }}>
+      {children}
+    </div>
+  );
+}
+
+/* ---------- charts: 3-strategy line comparisons, Graphite-coloured ---------- */
+
+const STRATEGY_LABELS: Record<ReitPortfolioStrategy, string> = {
+  withdraw: '1. Withdraw',
+  reinvest_harvest: '2. Reinvest, harvest',
+  auto_offramp: '3. Off-ramp',
+};
+const STRATEGY_ORDER: ReitPortfolioStrategy[] = ['withdraw', 'reinvest_harvest', 'auto_offramp'];
+
+function StrategyLinesChart({
+  results,
+  valueOf,
+  ariaLabel,
+  formatter,
+}: {
+  results: Record<ReitPortfolioStrategy, ReitPortfolioSimulationResult>;
+  valueOf: (row: ReitPortfolioYearRow) => number;
+  ariaLabel: string;
+  formatter: (v: number) => string;
+}) {
+  const colors = useGraphiteChartColors();
+  const strategyColor: Record<ReitPortfolioStrategy, string> = { withdraw: colors.line2, reinvest_harvest: colors.accent, auto_offramp: colors.s3 };
+  const years = results.withdraw.yearly.map((r) => r.year);
+  const data = years.map((year, i) => {
+    const row: Record<string, number> = { year };
+    for (const s of STRATEGY_ORDER) row[s] = valueOf(results[s].yearly[i]!);
+    return row;
+  });
+  return (
+    <div className="h-64 w-full" role="img" aria-label={ariaLabel}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={colors.rule} vertical={false} />
+          <XAxis dataKey="year" tickFormatter={(v: number) => `Yr ${v}`} tick={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fill: colors.ink2 }} axisLine={{ stroke: colors.rule }} tickLine={false} />
+          <YAxis tickFormatter={(v: number) => formatter(v)} tick={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fill: colors.ink2 }} axisLine={false} tickLine={false} width={60} />
+          <Tooltip
+            formatter={(v, name) => [formatter(Number(v)), STRATEGY_LABELS[name as ReitPortfolioStrategy] ?? String(name)]}
+            labelFormatter={(v) => `Year ${v}`}
+            contentStyle={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, background: colors.paper, border: `1px solid ${colors.rule}`, borderRadius: 4 }}
+          />
+          <Legend formatter={(v) => STRATEGY_LABELS[v as ReitPortfolioStrategy] ?? v} wrapperStyle={{ fontSize: 11.5, fontFamily: 'ui-sans-serif, system-ui, sans-serif' }} />
+          {STRATEGY_ORDER.map((s) => (
+            <Line
+              key={s}
+              isAnimationActive={false}
+              type="monotone"
+              dataKey={s}
+              stroke={strategyColor[s]}
+              strokeWidth={s === 'reinvest_harvest' ? 2.5 : 1.75}
+              dot={false}
+              {...(s === 'auto_offramp' ? { strokeDasharray: '5 4' } : {})}
+            />
+          ))}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function OutOfPocketChart({ results, ariaLabel }: { results: Record<ReitPortfolioStrategy, ReitPortfolioSimulationResult>; ariaLabel: string }) {
+  const colors = useGraphiteChartColors();
+  const years = results.withdraw.yearly.map((r) => r.year);
+  const data = years.map((year, i) => ({
+    year,
+    withdraw: results.withdraw.yearly[i]!.outOfPocketThisYearNominalInr / 12,
+    reinvest_harvest: results.reinvest_harvest.yearly[i]!.outOfPocketThisYearNominalInr / 12,
+    auto_offramp: results.auto_offramp.yearly[i]!.outOfPocketThisYearNominalInr / 12,
+  }));
+  return (
+    <div className="h-64 w-full" role="img" aria-label={ariaLabel}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={colors.rule} vertical={false} />
+          <XAxis dataKey="year" tickFormatter={(v: number) => `Yr ${v}`} tick={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fill: colors.ink2 }} axisLine={{ stroke: colors.rule }} tickLine={false} />
+          <YAxis tickFormatter={(v: number) => rupeeCompact(v)} tick={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fill: colors.ink2 }} axisLine={false} tickLine={false} width={60} />
+          <Tooltip formatter={(v, name) => [rupee(Number(v)), STRATEGY_LABELS[name as ReitPortfolioStrategy] ?? String(name)]} labelFormatter={(v) => `Year ${v}`} contentStyle={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, background: colors.paper, border: `1px solid ${colors.rule}`, borderRadius: 4 }} />
+          <Legend formatter={(v) => STRATEGY_LABELS[v as ReitPortfolioStrategy] ?? v} wrapperStyle={{ fontSize: 11.5, fontFamily: 'ui-sans-serif, system-ui, sans-serif' }} />
+          <Bar isAnimationActive={false} dataKey="withdraw" name="withdraw" fill={colors.line2} fillOpacity={0.7} />
+          <Bar isAnimationActive={false} dataKey="reinvest_harvest" name="reinvest_harvest" fill={colors.accent} fillOpacity={0.7} />
+          <Bar isAnimationActive={false} dataKey="auto_offramp" name="auto_offramp" fill={colors.s3} fillOpacity={0.7} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/* ---------- main route ---------- */
+
+export function ReitPortfolioBuilder() {
+  const [form, setForm] = useState<FormState>(() => defaultFormState());
+  const [showFutureRupees, setShowFutureRupees] = useState(false);
+  const [incomeView, setIncomeView] = useState<'payouts' | 'cash'>('payouts');
+  const [ybyTab, setYbyTab] = useState<ReitPortfolioStrategy | 'compare'>('auto_offramp');
+  const [allocationPreset, setAllocationPreset] = useState<'equal' | 'yield' | 'growth' | 'custom'>('equal');
+
+  const simulatorInput = useMemo(() => toSimulatorInput(form), [form]);
+  const results = useMemo<Record<ReitPortfolioStrategy, ReitPortfolioSimulationResult>>(
+    () => ({
+      withdraw: simulateReitPortfolio(simulatorInput, 'withdraw'),
+      reinvest_harvest: simulateReitPortfolio(simulatorInput, 'reinvest_harvest'),
+      auto_offramp: simulateReitPortfolio(simulatorInput, 'auto_offramp'),
+    }),
+    [simulatorInput],
+  );
+
+  const activeReits = form.reits.filter((r) => r.on);
+  const hasReits = activeReits.length > 0;
+
+  const rentalYieldPct = useMemo(
+    () =>
+      letOutFlatNetYieldPct({
+        grossRentalYieldPct: form.rentalGrossYieldPct,
+        vacancyMonthsPerYear: form.rentalVacancyMonths,
+        maintenancePctOfGrossYield: form.rentalMaintenancePct,
+        propertyTaxPctOfGrossYield: form.rentalPropertyTaxPct,
+        slabRatePct: form.slabRatePct,
+      }),
+    [form.rentalGrossYieldPct, form.rentalVacancyMonths, form.rentalMaintenancePct, form.rentalPropertyTaxPct, form.slabRatePct],
+  );
+
+  const portfolioYieldToday = useMemo(() => {
+    const weightSum = activeReits.reduce((a, r) => a + Math.max(0, r.weightPct), 0);
+    if (weightSum <= 0 || activeReits.length === 0) return { grossPct: 0, netPct: 0 };
+    let grossPct = 0;
+    let netPct = 0;
+    for (const r of activeReits) {
+      const w = Math.max(0, r.weightPct) / weightSum;
+      grossPct += w * r.yieldPct;
+      netPct += w * reitPostTaxYieldPct(toYieldInput(r), form.slabRatePct, form.taxDividendComponent);
+    }
+    return { grossPct, netPct };
+  }, [activeReits, form.slabRatePct, form.taxDividendComponent]);
+
+  const best = STRATEGY_ORDER.reduce((a, s) => (results[s].netResultTodayInr > results[a].netResultTodayInr ? s : a), 'withdraw' as ReitPortfolioStrategy);
+
+  function updateReit(id: string, patch: Partial<ReitRowState>) {
+    setForm((f) => ({ ...f, reits: f.reits.map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
+    setAllocationPreset('custom');
   }
 
+  function applyPreset(preset: 'equal' | 'yield' | 'growth') {
+    setForm((f) => {
+      const on = f.reits.filter((r) => r.on);
+      if (on.length === 0) return f;
+      let weights: number[];
+      if (preset === 'equal') {
+        weights = on.map(() => 100 / on.length);
+      } else if (preset === 'yield') {
+        weights = rankWeights(on, (r) => reitPostTaxYieldPct(toYieldInput(r), f.slabRatePct, f.taxDividendComponent));
+      } else {
+        const growths = on.map((r) => r.growthOverridePct ?? f.unitPriceGrowthPct);
+        const sameGrowth = growths.every((g) => Math.abs(g - growths[0]!) < 1e-9);
+        weights = rankWeights(on, sameGrowth ? (r) => r.priceCagrSinceListingPct ?? 0 : (r) => r.growthOverridePct ?? f.unitPriceGrowthPct);
+      }
+      const byId = new Map(on.map((r, i) => [r.id, Math.round(weights[i]! * 10) / 10]));
+      return { ...f, reits: f.reits.map((r) => (r.on ? { ...r, weightPct: byId.get(r.id) ?? 0 } : { ...r, weightPct: 0 })) };
+    });
+    setAllocationPreset(preset);
+  }
+
+  function resetToDefaults() {
+    setForm(defaultFormState());
+    setAllocationPreset('equal');
+  }
+
+  const asOf = getReitPortfolioSnapshotAsOf();
+  const caveat = getReitPortfolioSnapshotCaveat();
+
+  const bestResult = results[best];
+  const deflator = showFutureRupees ? 1 : bestResult.inflationDeflatorAtHorizon;
+
   return (
-    <CalcShell
-      title="REIT Portfolio Builder"
-      subtitle="A lumpsum and/or monthly SIP spread across a weighted bucket of India's 5 major listed REITs — distribution income as the rental-yield analogue, NAV growth as the paper-appreciation analogue."
-      back="home"
-      backLabel="← Home"
-      form={
-        <form
-          className="flex flex-col gap-5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!weightsAreValid(weights)) {
-              setError(`Weights must add up to 100% — currently ${weightTotal.toFixed(1)}%.`);
-              return;
-            }
-            setError(null);
-            setSubmitted(true);
-          }}
-        >
-          <NumberField label="Lumpsum, one-time" value={lumpsum} onChange={setLumpsum} step={50_000} min={0} required={false} />
-          <NumberField label="Monthly SIP" value={monthlySip} onChange={setMonthlySip} step={1_000} min={0} required={false} />
-          <NumberField label="Years contributing" value={contributionYears} onChange={setContributionYears} step={1} min={1} max={30} />
-          <NumberField label="Evaluate at year" value={evaluationYears} onChange={setEvaluationYears} step={1} min={1} max={30} />
-          <p className="-mt-2.5 text-xs text-ink-muted">
-            If you evaluate later than you contribute, the portfolio keeps compounding and receiving distributions after contributions stop — you&rsquo;re just not adding new money. Evaluate earlier to check progress partway through the contribution period.
+    <div className="reit-graphite -m-4 min-h-screen p-4 sm:p-6">
+      <style>{CSS_VARS}</style>
+
+      <div className="mx-auto max-w-[1400px]">
+        <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)' }}>
+          {form.horizonYears}-year outlook · {showFutureRupees ? 'future rupees' : "today's rupees"}
+        </div>
+        {hasReits ? (
+          <p className="mb-5 max-w-[70ch] text-lg leading-snug" style={{ color: 'var(--ink)' }}>
+            Over <strong>{form.horizonYears} years</strong> ({form.contributionWindowYears}-year contribution window
+            {form.horizonYears > form.contributionWindowYears ? `, then ${form.horizonYears - form.contributionWindowYears} more years harvesting ${Math.round(form.harvestPct)}%` : ', no harvesting period'}
+            ), strategy <strong>{STRATEGY_LABELS[best]}</strong> ends with the best net result:{' '}
+            <strong style={{ color: 'var(--acctext)' }}>{rupeeCompact(bestResult.netResultTodayInr)}</strong> in today's rupees after everything put in and taken out.
+            {results.auto_offramp.offRampMonth !== null && <> The off-ramp stops the SIP {monthsToWords(results.auto_offramp.offRampMonth)}.</>} Your allocation yields{' '}
+            <em style={{ color: 'var(--acctext)', fontStyle: 'normal', fontWeight: 700 }}>{pct(portfolioYieldToday.netPct)} after tax</em> today, against{' '}
+            <strong>{pct(rentalYieldPct)}</strong> for a let-out flat at the rental assumptions below.
           </p>
-          <NumberField
-            label="Inflation, annual (%, for the real-value figures)"
-            value={inflationPct}
-            onChange={setInflationPct}
-            step={0.5}
-            min={0}
-            max={20}
-            required={false}
-          />
+        ) : (
+          <p className="mb-5 text-sm" style={{ color: 'var(--muted)' }}>
+            Include at least one REIT in the table below to see results.
+          </p>
+        )}
 
-          <details className="rounded-sm border border-hairline px-3 py-2.5">
-            <summary className="cursor-pointer text-sm text-ink">Historical REIT reference — as on {historicalAsOf}</summary>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="text-ink-muted">
-                    <th className="pb-1.5 pr-3 font-normal">REIT</th>
-                    <th className="pb-1.5 pr-3 font-normal">Price</th>
-                    <th className="pb-1.5 pr-3 font-normal">Yield range</th>
-                    <th className="pb-1.5 pr-3 font-normal">3Y CAGR</th>
-                    <th className="pb-1.5 font-normal">P/E (TTM)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {REIT_DISPLAY.map((r) => {
-                    const instrument = historicalInstruments.find((i) => i.id === r.id);
-                    if (!instrument) return null;
-                    const cagr = instrument.priceCagr3y ?? instrument.priceCagr1y ?? instrument.priceCagr5y;
-                    return (
-                      <tr key={r.id} className="border-t border-hairline">
-                        <td className="py-1.5 pr-3 text-ink">
-                          <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: palette[r.colorKey] }} />
-                          {r.shortLabel}
-                        </td>
-                        <td className="py-1.5 pr-3 font-mono tabular-nums text-ink">
-                          <Amount value={instrument.marketPriceInr} compact={false} />
-                        </td>
-                        <td className="py-1.5 pr-3 font-mono tabular-nums text-ink">
-                          {(instrument.distributionYieldRangeMinPct * 100).toFixed(1)}–{(instrument.distributionYieldRangeMaxPct * 100).toFixed(1)}%
-                        </td>
-                        <td className="py-1.5 pr-3 font-mono tabular-nums text-ink">{cagr !== null ? `${(cagr * 100).toFixed(1)}%` : '—'}</td>
-                        <td className="py-1.5 font-mono tabular-nums text-ink">{instrument.peRatioTtm.toFixed(1)}×</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <p className="mt-2 text-xs text-ink-muted">
-                A point-in-time snapshot supplied directly, not yet cross-checked against exchange filings — the same figures the assumptions below default from. Wiring this to a live feed is planned, not built yet.
-              </p>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
+          {/* ---------- sidebar / assumptions ---------- */}
+          <aside className="rounded-lg border p-4" style={{ background: 'var(--rail)', borderColor: 'var(--rule)' }}>
+            <h2 className="mb-2 mt-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)' }}>
+              Money in · total
+            </h2>
+            <FieldRow label="Lumpsum at start (₹)">
+              <Stepper value={form.lumpsumInr} onChange={(v) => setForm((f) => ({ ...f, lumpsumInr: v }))} step={100_000} min={0} />
+            </FieldRow>
+            <FieldRow label="Monthly SIP (₹)">
+              <Stepper value={form.monthlySipInr} onChange={(v) => setForm((f) => ({ ...f, monthlySipInr: v }))} step={5_000} min={0} />
+            </FieldRow>
+            <FieldRow label="SIP step-up" hint="% a year">
+              <Stepper value={form.sipStepUpPct} onChange={(v) => setForm((f) => ({ ...f, sipStepUpPct: v }))} step={0.5} min={0} max={50} suffix="%" />
+            </FieldRow>
+            <FieldRow label="Buying cost" hint="brokerage + STT, % of each buy">
+              <Stepper value={form.brokeragePct} onChange={(v) => setForm((f) => ({ ...f, brokeragePct: v }))} step={0.01} min={0} max={5} suffix="%" />
+            </FieldRow>
+
+            <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
+              Allocation across REITs
+            </h2>
+            <div className="mb-2.5 flex flex-wrap gap-1.5">
+              {(['equal', 'yield', 'growth'] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => applyPreset(p)}
+                  className="flex-1 rounded border px-2 py-1.5 text-[11.5px] font-medium"
+                  style={allocationPreset === p ? { borderColor: 'var(--accent)', background: 'var(--accent-soft)', color: 'var(--ink)' } : { borderColor: 'var(--rule)', color: 'var(--ink2)' }}
+                >
+                  {p === 'equal' ? 'Equal' : p === 'yield' ? 'Net yield' : 'Price growth'}
+                </button>
+              ))}
             </div>
-          </details>
 
-          <fieldset className="flex flex-col gap-3">
-            <legend className="mb-1 flex w-full items-baseline justify-between gap-2 text-sm text-ink">
-              <span>Weight across the 5 REITs</span>
+            <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
+              Timeline
+            </h2>
+            <SliderField label="Contribution window" hint="years you pay the SIP" value={form.contributionWindowYears} onChange={(v) => setForm((f) => ({ ...f, contributionWindowYears: Math.round(v) }))} min={1} max={40} step={1} />
+            <SliderField label="Total horizon" hint="years, at least the window" value={form.horizonYears} onChange={(v) => setForm((f) => ({ ...f, horizonYears: Math.max(Math.round(v), form.contributionWindowYears) }))} min={1} max={40} step={1} />
+            <SliderField label="Harvesting after the window" hint="% of payouts taken as cash in strategies 2 and 3" value={form.harvestPct} onChange={(v) => setForm((f) => ({ ...f, harvestPct: v }))} min={0} max={100} step={1} suffix="%" />
+
+            <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
+              Growth and inflation
+            </h2>
+            <SliderField label="Unit price growth" hint="% a year, all REITs unless overridden" value={form.unitPriceGrowthPct} onChange={(v) => setForm((f) => ({ ...f, unitPriceGrowthPct: v }))} min={-5} max={15} step={0.5} suffix="%" />
+            <label className="mb-2.5 flex cursor-pointer items-start gap-2 text-xs" style={{ color: 'var(--ink2)' }}>
+              <input type="checkbox" checked={form.tieDistributionGrowthToPrice} onChange={(e) => setForm((f) => ({ ...f, tieDistributionGrowthToPrice: e.target.checked }))} className="mt-0.5" />
+              Payouts grow with the unit price (keeps today's yield constant)
+            </label>
+            {!form.tieDistributionGrowthToPrice && (
+              <FieldRow label="Payout growth" hint="% a year, since not tied">
+                <Stepper value={form.distributionGrowthPct} onChange={(v) => setForm((f) => ({ ...f, distributionGrowthPct: v }))} step={0.1} min={-20} max={30} suffix="%" />
+              </FieldRow>
+            )}
+            <SliderField label="Inflation" hint="% a year" value={form.inflationPct} onChange={(v) => setForm((f) => ({ ...f, inflationPct: v }))} min={0} max={12} step={0.5} suffix="%" />
+
+            <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
+              Tax
+            </h2>
+            <FieldRow label="Tax on interest & other income" hint="30% + 4% cess = 31.2">
+              <Stepper value={form.slabRatePct} onChange={(v) => setForm((f) => ({ ...f, slabRatePct: v }))} step={0.01} min={0} max={45} suffix="%" />
+            </FieldRow>
+            <label className="mb-2.5 flex cursor-pointer items-start gap-2 text-xs" style={{ color: 'var(--ink2)' }}>
+              <input type="checkbox" checked={form.taxDividendComponent} onChange={(e) => setForm((f) => ({ ...f, taxDividendComponent: e.target.checked }))} className="mt-0.5" />
+              <span>
+                Tax the dividend component too
+                <small className="block" style={{ color: 'var(--muted)' }}>
+                  FY2025-26 rule for SPVs on the concessional regime; exempt from FY2026-27
+                </small>
+              </span>
+            </label>
+            <FieldRow label="Long-term gains rate" hint="held over 12 months">
+              <Stepper value={form.ltcgRatePct} onChange={(v) => setForm((f) => ({ ...f, ltcgRatePct: v }))} step={0.1} min={0} max={40} suffix="%" />
+            </FieldRow>
+            <FieldRow label="Short-term gains rate">
+              <Stepper value={form.stcgRatePct} onChange={(v) => setForm((f) => ({ ...f, stcgRatePct: v }))} step={0.1} min={0} max={40} suffix="%" />
+            </FieldRow>
+            <FieldRow label="Long-term gains exempt (₹)">
+              <Stepper value={form.ltcgExemptionInr} onChange={(v) => setForm((f) => ({ ...f, ltcgExemptionInr: v }))} step={5_000} min={0} />
+            </FieldRow>
+            <FieldRow label="Cess on gains tax">
+              <Stepper value={form.capitalGainsCessPct} onChange={(v) => setForm((f) => ({ ...f, capitalGainsCessPct: v }))} step={0.1} min={0} max={10} suffix="%" />
+            </FieldRow>
+
+            <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
+              Rental comparison
+            </h2>
+            <FieldRow label="Gross rental yield" hint="% of property value a year">
+              <Stepper value={form.rentalGrossYieldPct} onChange={(v) => setForm((f) => ({ ...f, rentalGrossYieldPct: v }))} step={0.1} min={0} max={15} suffix="%" />
+            </FieldRow>
+            <FieldRow label="Vacancy" hint="months a year">
+              <Stepper value={form.rentalVacancyMonths} onChange={(v) => setForm((f) => ({ ...f, rentalVacancyMonths: v }))} step={0.5} min={0} max={12} />
+            </FieldRow>
+            <FieldRow label="Maintenance & repairs" hint="landlord-paid">
+              <Stepper value={form.rentalMaintenancePct} onChange={(v) => setForm((f) => ({ ...f, rentalMaintenancePct: v }))} step={1} min={0} max={100} suffix="%" />
+            </FieldRow>
+            <FieldRow label="Property tax">
+              <Stepper value={form.rentalPropertyTaxPct} onChange={(v) => setForm((f) => ({ ...f, rentalPropertyTaxPct: v }))} step={0.5} min={0} max={50} suffix="%" />
+            </FieldRow>
+
+            <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
+              Reinvesting payouts
+            </h2>
+            <select
+              value={form.reinvestmentSplit}
+              onChange={(e) => setForm((f) => ({ ...f, reinvestmentSplit: e.target.value as FormState['reinvestmentSplit'] }))}
+              className="mb-3 h-8 w-full rounded border px-2 text-xs"
+              style={{ background: 'var(--field)', borderColor: 'var(--rule)', color: 'var(--ink)' }}
+            >
+              <option value="allocation">In your allocation proportions</option>
+              <option value="same_reit">Back into the REIT that paid</option>
+            </select>
+            <button type="button" onClick={resetToDefaults} className="h-8 w-full rounded border text-xs font-medium" style={{ borderColor: 'var(--rule)', color: 'var(--ink)' }}>
+              Reset to {asOf} data
+            </button>
+          </aside>
+
+          {/* ---------- main content ---------- */}
+          <main className="flex min-w-0 flex-col gap-5">
+            {/* three-strategy panel */}
+            <div className="overflow-hidden rounded-lg border" style={{ background: 'var(--sheet)', borderColor: 'var(--rule)' }}>
+              <div className="flex items-center justify-between gap-2 border-b px-4 py-2" style={{ borderColor: 'var(--rule)', background: 'var(--panel)' }}>
+                <span className="text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
+                  Strategies · {form.horizonYears} years
+                </span>
+                <div className="flex items-center gap-2 text-[11.5px]" style={{ color: 'var(--muted)' }}>
+                  <span>Figures shown in</span>
+                  <Segmented options={[{ value: 'today', label: "Today's ₹" }, { value: 'future', label: 'Future ₹' }]} value={showFutureRupees ? 'future' : 'today'} onChange={(v) => setShowFutureRupees(v === 'future')} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3">
+                {STRATEGY_ORDER.map((s, i) => {
+                  const r = results[s];
+                  const isBest = s === best;
+                  return (
+                    <div key={s} className={i > 0 ? 'border-t p-5 md:border-l md:border-t-0' : 'p-5'} style={{ borderColor: 'var(--rule)' }}>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2 text-sm font-semibold">
+                          <span className="inline-block h-0 w-3.5 border-t-2" style={{ borderColor: s === 'withdraw' ? 'var(--line2)' : s === 'reinvest_harvest' ? 'var(--accent)' : 'var(--s3)', borderStyle: s === 'auto_offramp' ? 'dashed' : 'solid' }} />
+                          {STRATEGY_LABELS[s]}
+                        </span>
+                        {isBest && (
+                          <span className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold" style={{ background: 'var(--accent-soft)', color: 'var(--acctext)' }}>
+                            Best net result
+                          </span>
+                        )}
+                      </div>
+                      <p className="mb-2.5 min-h-[3.2em] text-[11.5px] leading-snug" style={{ color: 'var(--muted)' }}>
+                        {s === 'withdraw' && 'You pay the SIP through the window. Every payout comes to you as cash, the whole way.'}
+                        {s === 'reinvest_harvest' && 'You pay the SIP and reinvest every payout through the window. After it, you take the harvesting share as cash.'}
+                        {s === 'auto_offramp' && "Like 2, but your SIP stops for good once monthly post-tax payouts reach the monthly SIP. Payouts then fund the growth on their own."}
+                      </p>
+                      <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">{rupeeCompact(r.portfolioValueAtHorizonInr / deflator)}</div>
+                      <div className="mb-2.5 text-[11px]" style={{ color: 'var(--muted)' }}>
+                        Portfolio value at year {form.horizonYears}, {showFutureRupees ? 'future ₹' : "today's ₹"}
+                      </div>
+                      <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-xs">
+                        <dt style={{ color: 'var(--muted)' }}>Value if sold, after gains tax</dt>
+                        <dd className="num text-right font-semibold">{rupeeCompact((r.portfolioValueAtHorizonInr - r.exitCapitalGainsTaxInr) / deflator)}</dd>
+                        <dt style={{ color: 'var(--muted)' }}>Post-tax payouts/mo, final year</dt>
+                        <dd className="num text-right font-semibold">{rupee(r.finalYearPostTaxPayoutPerMonthInr / deflator)}</dd>
+                        <dt style={{ color: 'var(--muted)' }}>Cash taken/mo, final year</dt>
+                        <dd className="num text-right font-semibold">{rupee(r.finalYearCashTakenPerMonthInr / deflator)}</dd>
+                        <dt className="col-span-2 my-1 h-px" style={{ background: 'var(--rule)' }} />
+                        <dt style={{ color: 'var(--muted)' }}>Total money put in</dt>
+                        <dd className="num text-right font-semibold">{rupeeCompact(r.totalContributedNominalInr)}</dd>
+                        <dt style={{ color: 'var(--muted)' }}>…in today's rupees</dt>
+                        <dd className="num text-right font-semibold">{rupeeCompact(r.totalContributedRealInr)}</dd>
+                        <dt style={{ color: 'var(--muted)' }}>Cash taken, today's rupees</dt>
+                        <dd className="num text-right font-semibold">{rupeeCompact(r.totalCashTakenRealInr)}</dd>
+                        <dt className="font-semibold" style={{ color: 'var(--ink)' }}>
+                          Net result, today's rupees
+                        </dt>
+                        <dd className="num text-right font-semibold" style={{ color: 'var(--acctext)' }}>
+                          {rupeeCompact(r.netResultTodayInr)}
+                        </dd>
+                      </dl>
+                      {s === 'auto_offramp' && (
+                        <div className="mt-3">
+                          {r.offRampMonth !== null ? (
+                            <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: 'var(--p2bg)', color: 'var(--p2fg)' }}>
+                              SIP stops {monthsToWords(r.offRampMonth)}
+                            </span>
+                          ) : (
+                            <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: 'var(--warn-soft)', color: 'var(--ink)' }}>
+                              Payouts never reach the SIP within the window — behaves like strategy 2
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* monthly income + rental comparison */}
+            <Card>
+              <h2 className="mb-1 text-[15px] font-semibold">Monthly income</h2>
+              <p className="mb-3 max-w-[90ch] text-xs" style={{ color: 'var(--muted)' }}>
+                The post-tax income this portfolio generates, and how it compares with letting out a flat of the same value. Rental uses the 30% standard deduction on rent less property tax.
+              </p>
+              <div className="grid grid-cols-1 overflow-hidden rounded-md border sm:grid-cols-2 lg:grid-cols-4" style={{ borderColor: 'var(--rule)' }}>
+                <div className="border-b p-4 sm:border-b-0 sm:border-r lg:border-b-0" style={{ borderColor: 'var(--rule)', background: 'var(--hl, var(--panel))' }}>
+                  <div className="min-h-[2.6em] text-[11.5px]" style={{ color: 'var(--muted)' }}>
+                    REIT post-tax yield today, your allocation
+                  </div>
+                  <div className="num mt-1 text-2xl font-medium" style={{ color: 'var(--acctext)' }}>
+                    {pct(portfolioYieldToday.netPct)}
+                  </div>
+                  <div className="mt-0.5 text-[11px]" style={{ color: 'var(--muted)' }}>
+                    {pct(portfolioYieldToday.grossPct)} before tax
+                  </div>
+                </div>
+                <div className="border-b p-4 sm:border-r lg:border-b-0" style={{ borderColor: 'var(--rule)' }}>
+                  <div className="min-h-[2.6em] text-[11.5px]" style={{ color: 'var(--muted)' }}>
+                    REIT income per ₹1 Cr invested today
+                  </div>
+                  <div className="num mt-1 text-2xl font-medium" style={{ color: 'var(--acctext)' }}>
+                    {rupee((portfolioYieldToday.netPct / 100) * 1e7 / 12)}
+                  </div>
+                  <div className="mt-0.5 text-[11px]" style={{ color: 'var(--muted)' }}>
+                    a month, after tax
+                  </div>
+                </div>
+                <div className="border-b p-4 sm:border-b-0 sm:border-r" style={{ borderColor: 'var(--rule)' }}>
+                  <div className="min-h-[2.6em] text-[11.5px]" style={{ color: 'var(--muted)' }}>
+                    Let-out flat post-tax yield
+                  </div>
+                  <div className="num mt-1 text-2xl font-medium">{pct(rentalYieldPct)}</div>
+                  <div className="mt-0.5 text-[11px]" style={{ color: 'var(--muted)' }}>
+                    {pct(form.rentalGrossYieldPct)} gross, after vacancy, costs and tax
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="min-h-[2.6em] text-[11.5px]" style={{ color: 'var(--muted)' }}>
+                    Flat income per ₹1 Cr of value
+                  </div>
+                  <div className="num mt-1 text-2xl font-medium">{rupee((rentalYieldPct / 100) * 1e7 / 12)}</div>
+                  <div className="mt-0.5 text-[11px]" style={{ color: 'var(--muted)' }}>
+                    a month, after tax
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* charts */}
+            <Card>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Portfolio value, in {showFutureRupees ? 'future rupees' : "today's rupees"}</h3>
+              </div>
+              <StrategyLinesChart
+                results={results}
+                valueOf={(row) => (showFutureRupees ? row.valueNominalInr : row.valueRealInr)}
+                ariaLabel="Portfolio value by year for the three strategies"
+                formatter={rupeeCompact}
+              />
+            </Card>
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              <Card>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">{incomeView === 'cash' ? 'Cash you take each month' : 'Post-tax income each month'}</h3>
+                  <Segmented options={[{ value: 'payouts', label: 'Payouts generated' }, { value: 'cash', label: 'Cash you take' }]} value={incomeView} onChange={setIncomeView} />
+                </div>
+                <StrategyLinesChart
+                  results={results}
+                  valueOf={(row) => (incomeView === 'cash' ? (showFutureRupees ? row.cashTakenThisYearNominalInr : row.cashTakenThisYearRealInr) : showFutureRupees ? row.postTaxPayoutsThisYearNominalInr : row.postTaxPayoutsThisYearRealInr) / 12}
+                  ariaLabel="Monthly income by year for the three strategies"
+                  formatter={rupee}
+                />
+              </Card>
+              <Card>
+                <h3 className="mb-2 text-sm font-semibold">What you pay in each month</h3>
+                <OutOfPocketChart results={results} ariaLabel="Monthly out-of-pocket SIP by year for the three strategies" />
+              </Card>
+            </div>
+
+            {/* year-by-year table */}
+            <Card>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold">Year by year</h3>
+                <Segmented
+                  options={[
+                    { value: 'withdraw', label: 'Strategy 1' },
+                    { value: 'reinvest_harvest', label: 'Strategy 2' },
+                    { value: 'auto_offramp', label: 'Strategy 3' },
+                    { value: 'compare', label: 'Compare' },
+                  ]}
+                  value={ybyTab}
+                  onChange={setYbyTab}
+                />
+              </div>
+              <div className="max-h-[480px] overflow-auto rounded-md border" style={{ borderColor: 'var(--rule)' }}>
+                <table className="w-full text-xs">
+                  {ybyTab === 'compare' ? (
+                    <>
+                      <thead className="sticky top-0" style={{ background: 'var(--panel)' }}>
+                        <tr>
+                          <th className="sticky left-0 border-b p-2 text-left" style={{ borderColor: 'var(--rule)', background: 'var(--panel)' }}>
+                            Year
+                          </th>
+                          {STRATEGY_ORDER.map((s) => (
+                            <th key={s} className="border-b border-l p-2 text-center" style={{ borderColor: 'var(--rule)' }}>
+                              {STRATEGY_LABELS[s]}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {results.withdraw.yearly.map((_, i) => {
+                          const year = results.withdraw.yearly[i]!.year;
+                          const netValues = STRATEGY_ORDER.map((s) => results[s].yearly[i]!.netIfSoldRealInr);
+                          const bestIdx = netValues.indexOf(Math.max(...netValues));
+                          return (
+                            <tr key={year}>
+                              <td className="sticky left-0 border-b p-2 num" style={{ borderColor: 'var(--rule)', background: 'var(--sheet)' }}>
+                                {year}
+                              </td>
+                              {STRATEGY_ORDER.map((s, si) => (
+                                <td key={s} className="border-b border-l p-2 text-right num" style={{ borderColor: 'var(--rule)', fontWeight: si === bestIdx ? 700 : 400 }}>
+                                  {rupeeCompact(results[s].yearly[i]!.netIfSoldRealInr)}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </>
+                  ) : (
+                    <>
+                      <thead className="sticky top-0" style={{ background: 'var(--panel)' }}>
+                        <tr>
+                          {['Year', 'Phase', 'Paid in', 'Paid in to date', 'Post-tax payouts', 'Reinvested', 'Cash taken', 'Tax', 'Value', 'Net if sold'].map((h) => (
+                            <th key={h} className="border-b p-2 text-right first:text-left" style={{ borderColor: 'var(--rule)' }}>
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {results[ybyTab].yearly.map((row) => (
+                          <tr key={row.year}>
+                            <td className="border-b p-2 num" style={{ borderColor: 'var(--rule)' }}>
+                              {row.year}
+                            </td>
+                            <td className="border-b p-2 text-left" style={{ borderColor: 'var(--rule)' }}>
+                              <span
+                                className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold"
+                                style={{
+                                  background: row.phase === 'contributing' ? 'var(--p1bg)' : row.phase === 'harvesting' ? 'var(--p3bg)' : row.phase === 'holding' ? 'var(--p4bg)' : 'var(--p2bg)',
+                                  color: row.phase === 'contributing' ? 'var(--p1fg)' : row.phase === 'harvesting' ? 'var(--p3fg)' : row.phase === 'holding' ? 'var(--p4fg)' : 'var(--p2fg)',
+                                }}
+                              >
+                                {row.phase.replace('_', ' ')}
+                              </span>
+                            </td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                              {rupee(row.paidInThisYearNominalInr)}
+                            </td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                              {rupee(showFutureRupees ? row.paidInToDateNominalInr : row.paidInToDateRealInr)}
+                            </td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                              {rupee(showFutureRupees ? row.postTaxPayoutsThisYearNominalInr : row.postTaxPayoutsThisYearRealInr)}
+                            </td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                              {rupee(showFutureRupees ? row.reinvestedThisYearNominalInr : row.reinvestedThisYearRealInr)}
+                            </td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                              {rupee(showFutureRupees ? row.cashTakenThisYearNominalInr : row.cashTakenThisYearRealInr)}
+                            </td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                              {rupee(showFutureRupees ? row.taxOnPayoutsThisYearNominalInr : row.taxOnPayoutsThisYearRealInr)}
+                            </td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                              {rupeeCompact(showFutureRupees ? row.valueNominalInr : row.valueRealInr)}
+                            </td>
+                            <td className="border-b p-2 text-right num font-semibold" style={{ borderColor: 'var(--rule)' }}>
+                              {rupeeCompact(row.netIfSoldRealInr)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </>
+                  )}
+                </table>
+              </div>
+              <p className="mt-2 text-[11px]" style={{ color: 'var(--muted)' }}>
+                Money figures are in {showFutureRupees ? 'future ₹' : "today's ₹"}. "Net if sold" is the value after capital-gains tax plus all cash taken, minus all money paid in, in today's rupees.
+              </p>
+            </Card>
+
+            {/* editable REIT table */}
+            <Card>
+              <h2 className="mb-1 text-[15px] font-semibold">The REITs</h2>
+              <p className="mb-3 max-w-[95ch] text-xs" style={{ color: 'var(--muted)' }}>
+                Every cell is editable. Yield is the annualised payout divided by price. The three components must add to 100 — "interest" includes other taxable income such as treasury returns. Leave price growth blank to use the global rate.
+              </p>
+              <div className="overflow-auto rounded-md border" style={{ borderColor: 'var(--rule)' }}>
+                <table className="w-full text-xs">
+                  <thead style={{ background: 'var(--panel)' }}>
+                    <tr>
+                      {['Include', 'REIT', 'Price ₹', 'Yield %', 'Interest %', 'Dividend %', 'RoC %', 'Sum', 'Growth % (model)', 'CAGR since listing %', ''].map((h) => (
+                        <th key={h} className="border-b p-2 text-right first:text-center" style={{ borderColor: 'var(--rule)' }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.reits.map((r) => {
+                      const sum = r.interestPct + r.dividendPct + r.returnOfCapitalPct;
+                      const sumOff = Math.abs(sum - 100) > 0.05;
+                      return (
+                        <tr key={r.id} style={r.on ? undefined : { opacity: 0.45 }}>
+                          <td className="border-b p-2 text-center" style={{ borderColor: 'var(--rule)' }}>
+                            <input type="checkbox" checked={r.on} onChange={(e) => updateReit(r.id, { on: e.target.checked })} />
+                          </td>
+                          <td className="border-b p-2" style={{ borderColor: 'var(--rule)' }}>
+                            <input value={r.name} onChange={(e) => updateReit(r.id, { name: e.target.value })} className="w-32 rounded border px-1.5 py-1 text-xs" style={{ borderColor: 'var(--rule)', background: 'var(--field)' }} />
+                          </td>
+                          {(
+                            [
+                              ['priceInr', 0.01],
+                              ['yieldPct', 0.01],
+                              ['interestPct', 0.1],
+                              ['dividendPct', 0.1],
+                              ['returnOfCapitalPct', 0.1],
+                            ] as const
+                          ).map(([key, step]) => (
+                            <td key={key} className="border-b p-2" style={{ borderColor: 'var(--rule)' }}>
+                              <input
+                                type="number"
+                                step={step}
+                                value={r[key]}
+                                onChange={(e) => updateReit(r.id, { [key]: parseFloat(e.target.value) || 0 } as Partial<ReitRowState>)}
+                                className="num w-16 rounded border px-1.5 py-1 text-right text-xs"
+                                style={{ borderColor: 'var(--rule)', background: 'var(--field)' }}
+                              />
+                            </td>
+                          ))}
+                          <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)', color: sumOff ? 'var(--warn)' : undefined, fontWeight: sumOff ? 700 : 400 }}>
+                            {sum.toFixed(1)}
+                          </td>
+                          <td className="border-b p-2" style={{ borderColor: 'var(--rule)' }}>
+                            <input
+                              type="number"
+                              step={0.1}
+                              placeholder="global"
+                              value={r.growthOverridePct ?? ''}
+                              onChange={(e) => updateReit(r.id, { growthOverridePct: e.target.value === '' ? null : parseFloat(e.target.value) })}
+                              className="num w-16 rounded border px-1.5 py-1 text-right text-xs"
+                              style={{ borderColor: 'var(--rule)', background: 'var(--field)' }}
+                            />
+                          </td>
+                          <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                            {r.priceCagrSinceListingPct ?? '—'}
+                          </td>
+                          <td className="border-b p-2 text-right" style={{ borderColor: 'var(--rule)' }}>
+                            <button type="button" onClick={() => setForm((f) => ({ ...f, reits: f.reits.filter((x) => x.id !== r.id) }))} className="rounded border px-2 py-1 text-[11px]" style={{ borderColor: 'var(--rule)', color: 'var(--ink2)' }}>
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
               <button
                 type="button"
-                onClick={() => setWeights(equalWeights())}
-                className="text-xs text-ink-muted underline decoration-dotted hover:text-rust"
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    reits: [...f.reits, { id: `custom-${Date.now()}`, name: 'New REIT', on: true, priceInr: 100, yieldPct: 6, interestPct: 30, dividendPct: 40, returnOfCapitalPct: 30, growthOverridePct: null, priceCagrSinceListingPct: null, weightPct: 0 }],
+                  }))
+                }
+                className="mt-3 h-8 rounded border px-3 text-xs font-medium"
+                style={{ borderColor: 'var(--rule)', color: 'var(--ink)' }}
               >
-                Split evenly
+                + Add a REIT
               </button>
-            </legend>
-            {REIT_DISPLAY.map((r) => (
-              <label key={r.id} className="flex items-center gap-3 text-sm">
-                <span
-                  aria-hidden="true"
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: palette[r.colorKey] }}
-                />
-                <span className="w-32 shrink-0 text-ink">{r.shortLabel}</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={Number.isFinite(weights[r.id]) ? weights[r.id] : ''}
-                  onChange={(e) => setWeights({ ...weights, [r.id]: e.target.value === '' ? NaN : Number(e.target.value) })}
-                  className="w-20 rounded-sm border border-hairline bg-paper px-2 py-1 font-mono tabular-nums text-ink"
-                />
-                <span className="text-ink-muted">%</span>
-              </label>
-            ))}
-            <p className={`text-xs ${weightsOk ? 'text-ink-muted' : 'text-ochre'}`}>Total: {weightTotal.toFixed(1)}%{!weightsOk && ' — must equal 100%'}</p>
-          </fieldset>
+            </Card>
 
-          <details className="rounded-sm border border-hairline px-3 py-2.5">
-            <summary className="cursor-pointer text-sm text-ink">Per-REIT assumptions (advanced)</summary>
-            <div className="mt-3 flex flex-col gap-4">
-              <p className="text-xs text-ink-muted">
-                Distribution yield defaults to each REIT&rsquo;s own trailing yield-range midpoint; NAV growth defaults to a haircut trailing price CAGR — deliberately below the historical figure. Raise either only deliberately. Tax-adjusted yield is computed, not editable — it nets the distribution yield above against that REIT&rsquo;s effective tax rate on distributions at slab rate, since that&rsquo;s a rate this module already ships per REIT rather than a further assumption to set.
+            {/* per-REIT results */}
+            <Card>
+              <h2 className="mb-1 text-[15px] font-semibold">Result by REIT</h2>
+              <p className="mb-3 text-xs" style={{ color: 'var(--muted)' }}>
+                Value and monthly post-tax payout in {showFutureRupees ? 'future ₹' : "today's ₹"} at year {form.horizonYears}.
               </p>
-              {REIT_DISPLAY.map((r) => {
-                const instrument = historicalInstruments.find((i) => i.id === r.id);
-                const taxRatePct = instrument?.effectiveTaxRateOnDistributions.forSlabRatePct ?? 0;
-                const taxAdjustedYieldPct = assumptions[r.id].yieldPct * (1 - taxRatePct);
-                return (
-                  <div key={r.id} className="flex flex-col gap-2">
-                    <p className="text-sm text-ink">{r.shortLabel}</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      <label className="flex flex-col gap-1 text-xs">
-                        <span className="text-ink-muted">NAV growth, annual (%)</span>
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          step={0.1}
-                          value={Math.round(assumptions[r.id].navGrowthPct * 1000) / 10}
-                          onChange={(e) =>
-                            setAssumptions({
-                              ...assumptions,
-                              [r.id]: { ...assumptions[r.id], navGrowthPct: Number(e.target.value) / 100 },
-                            })
-                          }
-                          className="rounded-sm border border-hairline bg-paper px-2 py-1 font-mono tabular-nums text-ink"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1 text-xs">
-                        <span className="text-ink-muted">Distribution yield, annual (%)</span>
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          step={0.1}
-                          value={Math.round(assumptions[r.id].yieldPct * 1000) / 10}
-                          onChange={(e) =>
-                            setAssumptions({
-                              ...assumptions,
-                              [r.id]: { ...assumptions[r.id], yieldPct: Number(e.target.value) / 100 },
-                            })
-                          }
-                          className="rounded-sm border border-hairline bg-paper px-2 py-1 font-mono tabular-nums text-ink"
-                        />
-                      </label>
-                      <div className="flex flex-col gap-1 text-xs">
-                        <span className="text-ink-muted">Tax-adjusted yield (%)</span>
-                        <span
-                          title={
-                            instrument
-                              ? `After a ${(taxRatePct * 100).toFixed(0)}% effective tax rate on distributions at slab rate — ${instrument.effectiveTaxRateOnDistributions.note}`
-                              : undefined
-                          }
-                          className="rounded-sm border border-hairline bg-paper/50 px-2 py-1 font-mono tabular-nums text-ink-muted"
-                        >
-                          {(taxAdjustedYieldPct * 100).toFixed(1)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </details>
+              <div className="overflow-auto rounded-md border" style={{ borderColor: 'var(--rule)' }}>
+                <table className="w-full text-xs">
+                  <thead style={{ background: 'var(--panel)' }}>
+                    <tr>
+                      <th className="border-b p-2 text-left" style={{ borderColor: 'var(--rule)' }}>
+                        REIT
+                      </th>
+                      <th className="border-b p-2 text-right" style={{ borderColor: 'var(--rule)' }}>
+                        Allocation
+                      </th>
+                      <th className="border-b p-2 text-right" style={{ borderColor: 'var(--rule)' }}>
+                        Post-tax yield
+                      </th>
+                      {STRATEGY_ORDER.map((s) => (
+                        <th key={s} colSpan={2} className="border-b border-l p-2 text-center" style={{ borderColor: 'var(--rule)' }}>
+                          {STRATEGY_LABELS[s]}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.withdraw.reits.map((baseRow, i) => (
+                      <tr key={baseRow.id}>
+                        <td className="border-b p-2" style={{ borderColor: 'var(--rule)' }}>
+                          {baseRow.name}
+                        </td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                          {baseRow.weightPct.toFixed(1)}%
+                        </td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                          {pct(baseRow.postTaxYieldTodayPct)}
+                        </td>
+                        {STRATEGY_ORDER.map((s) => {
+                          const row = results[s].reits[i]!;
+                          return (
+                            <Fragment key={s}>
+                              <td className="border-b border-l p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                                {rupeeCompact(row.valueAtHorizonInr / deflator)}
+                              </td>
+                              <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                                {rupee(row.finalYearPostTaxPayoutPerMonthInr / deflator)}
+                              </td>
+                            </Fragment>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
 
-          {error && <Callout tone="warning">{error}</Callout>}
-
-          <SubmitButton>Build portfolio →</SubmitButton>
-        </form>
-      }
-    >
-      {result && (
-        <section className="flex flex-col gap-8" aria-label="REIT portfolio result">
-          <div>
-            <p className="text-sm text-ink-muted">Portfolio value at the end of year {evaluationYears}</p>
-            <Amount value={result.finalValue} compact={false} className="font-serif-heading text-4xl text-rust" />
-            <p className="mt-1 text-sm text-ink-muted">
-              ≈ <Amount value={realFinalValue} compact={false} className="text-ink-muted" /> in today&rsquo;s rupees, at {inflationPct}% assumed inflation
-            </p>
-          </div>
-
-          <Callout tone="positive">
-            At year {evaluationYears}, this portfolio is distributing about{' '}
-            <Amount value={result.monthlyIncomeAtHorizonNominal} compact={false} className="font-medium text-ink" /> a month — the rental-yield
-            equivalent this tool is built to surface, the same way a rent cheque would read. In today&rsquo;s rupees, that&rsquo;s about{' '}
-            <Amount value={monthlyIncomeAtHorizonReal} compact={false} className="font-medium text-ink" /> a month.
-          </Callout>
-
-          <dl className="grid max-w-md grid-cols-2 gap-y-4 text-sm">
-            <dt className="text-ink-muted">Total invested</dt>
-            <dd className="text-right"><Amount value={result.totalInvested} className="text-ink" /></dd>
-            <dt className="text-ink-muted">Wealth gained (NAV, unrealised)</dt>
-            <dd className="text-right"><Amount value={result.finalValue - result.totalInvested} className="text-moss" /></dd>
-            <dt className="text-ink-muted">Total distributions received</dt>
-            <dd className="text-right"><Amount value={result.totalGrossDistributions} className="text-ink" /></dd>
-            <dt className="text-ink-muted">Of which taxable as Other Sources</dt>
-            <dd className="text-right"><Amount value={totalTaxableOtherSources} className="text-ink" /></dd>
-          </dl>
-
-          <div>
-            <p className="mb-2 text-sm text-ink">Portfolio composition</p>
-            <div className="flex h-3 w-full overflow-hidden rounded-sm border border-hairline">
-              {REIT_DISPLAY.filter((r) => (weights[r.id] ?? 0) > 0).map((r) => (
-                <div
-                  key={r.id}
-                  style={{ width: `${weights[r.id]}%`, backgroundColor: palette[r.colorKey] }}
-                  title={`${r.shortLabel}: ${weights[r.id]}%`}
-                />
-              ))}
-            </div>
-            <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-ink-muted">
-              {REIT_DISPLAY.map((r) => {
-                const leg = result.legs.find((l) => l.reitId === r.id)!;
-                return (
-                  <li key={r.id} className="flex items-center gap-1.5">
-                    <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: palette[r.colorKey] }} />
-                    {r.shortLabel} — {leg.weightPct}%
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          <div>
-            <p className="mb-3 text-sm text-ink">Invested vs. portfolio value over time, with annual distributions</p>
-            <GrowthWithIncomeChart
-              data={[...result.yearlyRows]}
-              ariaLabel={
-                contributionYears < evaluationYears
-                  ? `Cumulative amount invested versus the blended REIT portfolio's value, year by year, with that year's own gross distributions as bars on a secondary axis; contributions stop after year ${contributionYears} but the portfolio keeps compounding and receiving distributions through year ${evaluationYears}`
-                  : "Cumulative amount invested versus the blended REIT portfolio's value, year by year, with that year's own gross distributions as bars on a secondary axis"
-              }
-              {...(contributionYears < evaluationYears ? { contributionEndYear: contributionYears } : {})}
-            />
-          </div>
-
-          <div>
-            <p className="mb-3 text-sm text-ink">What REIT payouts have actually looked like, point in time</p>
-            <p className="mb-3 text-xs text-ink-muted">
-              Each selected REIT&rsquo;s own actual disclosed distributions, at their own reporting dates, plotted as effective post-tax yield % — already comparable across REITs regardless of unit price, so nothing needs indexing to a common base. Shown as one small panel per REIT, sharing a common date axis but each scaled to its own range, so smaller moves stay readable. Each dot is one real disclosed payout; hover it for the per-unit payout, unit price, gross yield, the interest/dividend/rental/return-of-capital split, and the effective post-tax yield plotted here. Drag the strip under the panels to pan across the full 2019–2026 history, or resize it to zoom in or out — all panels move together.
-            </p>
-            <fieldset className="mb-3 flex flex-wrap gap-3">
-              <legend className="sr-only">Choose which REITs to show</legend>
-              {REIT_DISPLAY.map((r) => (
-                <label key={r.id} className="flex items-center gap-1.5 text-xs text-ink">
-                  <input type="checkbox" checked={selectedReitIds.includes(r.id)} onChange={() => toggleReit(r.id)} />
-                  <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: palette[r.colorKey] }} />
-                  {r.shortLabel}
-                </label>
-              ))}
-            </fieldset>
-            <ReitIndexedPayoutChart
-              key={selectedReitIds.join(',')}
-              data={indexedData}
-              series={indexedSeries}
-              ariaLabel="Each selected REIT's own effective post-tax yield at their real disclosure dates, shown as one small panel per REIT sharing a common x-axis, each with its own y-axis range, with a dot at each real payout date; hover a dot for the per-unit payout, unit price, gross yield, the interest/dividend/rental/return-of-capital split, and the effective post-tax yield"
-            />
-          </div>
-        </section>
-      )}
-    </CalcShell>
+            {/* assumptions / provenance */}
+            <Card>
+              <h2 className="mb-2 text-[15px] font-semibold">Assumptions & data</h2>
+              <ul className="list-disc space-y-1.5 pl-5 text-xs" style={{ color: 'var(--ink2)' }}>
+                <li>REIT prices, yields and component splits are a snapshot as of {asOf}, supplied directly rather than pulled from an official filing — not independently cross-checked against BSE/NSE disclosures.</li>
+                {caveat && <li>{caveat}</li>}
+                <li>The lumpsum and SIP are split across REITs by your allocation. Payouts arrive every quarter on units held before the quarter ends; fractional units are allowed.</li>
+                <li>Each payout is split into interest (taxed at your rate when received), dividend (exempt unless ticked) and return of capital (not taxed, but lowers your cost; anything beyond your cost is taxed at your rate).</li>
+                <li>Off-ramp test (strategy 3): after each quarterly payout, the post-tax payout across all REITs divided by 3 is compared with your total monthly SIP, step-up included. Once it's equal or higher, the SIP stops for the rest of the window and doesn't restart.</li>
+                <li>"Net result" is the value if sold after gains tax, plus all cash you took, minus all money you put in, each converted to today's rupees at the date it happened. Gains tax applies lot by lot: units held over 12 months at the long-term rate after the exemption, the rest at the short-term rate, plus cess.</li>
+                <li>Rental comparison: rent collected for (12 − vacancy) months, less property tax and landlord maintenance; taxed at your rate on 70% of (rent less property tax), per the 30% standard deduction. It compares income only — property price growth, loans and exit costs are left to the full Allocation Comparator.</li>
+              </ul>
+            </Card>
+          </main>
+        </div>
+      </div>
+    </div>
   );
 }

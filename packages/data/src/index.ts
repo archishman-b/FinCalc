@@ -4,6 +4,7 @@ import { FixedIncomeRules } from './fixed-income';
 import { IncomeTaxRules } from './income-tax';
 import { ReitDistributionRules } from './reit-distributions';
 import { ReitDistributionHistoryPack, ReitDistributionRecord, ReitInstrument, ReitInstrumentsPack } from './reit-reference';
+import { ReitPortfolioSnapshotPack, ReitPortfolioSnapshotRow } from './reit-portfolio-snapshot';
 import { RulePackEnvelope } from './schema';
 import { StampDutyRules } from './stamp-duty';
 
@@ -15,6 +16,7 @@ export * from './fixed-income';
 export * from './stamp-duty';
 export * from './reit-distributions';
 export * from './reit-reference';
+export * from './reit-portfolio-snapshot';
 
 /**
  * Registry of shipped rule packs. Empty in Phase 0 by design; income-tax and
@@ -130,4 +132,39 @@ export function getReitInstrumentsAsOf(): string {
 /** The full quarterly distribution-history table across all 5 REITs (93 records, 2019-08-14 to 2026-08-28) — see reit-reference.ts's ReitDistributionRecord for the shape and computeHistoricalComponentSplit for deriving a default four-component split from it. */
 export function getReitDistributionHistory(): readonly ReitDistributionRecord[] {
   return parsedReitDistributionHistory.records;
+}
+
+/**
+ * The REIT Portfolio Builder's simulator snapshot (reit-portfolio-snapshot.ts)
+ * is, like reit-instruments.json/reit-distribution-history.json above, kept
+ * outside the FY-scoped `registry` — same reason: ReitDataProvenance's
+ * `sourceType: 'user_supplied'` doesn't carry an `https://` source, which
+ * RulePackEnvelope's Provenance requires. See that file's module doc
+ * comment for why this is a separate pack from reit-instruments.json rather
+ * than a reuse of it.
+ */
+import reitPortfolioSnapshotPack from '../packs/reit-portfolio-snapshot.fy-2026-27.json';
+
+const parsedReitPortfolioSnapshot = ReitPortfolioSnapshotPack.parse(reitPortfolioSnapshotPack);
+
+/** The REIT Portfolio Builder simulator's point-in-time snapshot: price, distribution yield and 3-component split for all 5 REITs, as a fixed set of numbers the golden tests are verified against — see reit-portfolio-snapshot.ts's module doc comment for why this doesn't reuse getReitInstruments(). */
+export function getReitPortfolioSnapshot(): readonly ReitPortfolioSnapshotRow[] {
+  return parsedReitPortfolioSnapshot.reits;
+}
+
+/** One REIT's row from the Portfolio Builder snapshot, by id. Throws if the id isn't shipped. */
+export function getReitPortfolioSnapshotRow(id: string): ReitPortfolioSnapshotRow {
+  const row = parsedReitPortfolioSnapshot.reits.find((r) => r.id === id);
+  if (!row) throw new RangeError(`getReitPortfolioSnapshotRow: no snapshot row shipped for id "${id}"`);
+  return row;
+}
+
+/** The date this snapshot (price, yield, component split) was recorded as-of — surface next to any UI use of getReitPortfolioSnapshot() so the figures are never presented as live. */
+export function getReitPortfolioSnapshotAsOf(): string {
+  return parsedReitPortfolioSnapshot.asOf;
+}
+
+/** The snapshot pack's own caveat note (proxy component splits, unverified CAGR figures except Embassy's) — surface verbatim in the Assumptions panel rather than re-summarising it. */
+export function getReitPortfolioSnapshotCaveat(): string | undefined {
+  return parsedReitPortfolioSnapshot.provenance.note;
 }
