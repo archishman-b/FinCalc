@@ -1,48 +1,19 @@
 /**
- * A hash router in ~30 lines rather than a routing library. Five doors plus
- * a handful of Tier-1 calculators (Phase 6+) is not enough surface to
- * justify the dependency yet, and `#/comparator` is exactly as bookmarkable
- * and shareable as anything react-router would give here — brief §4's URL
- * requirement is really about *scenario* state (Phase 8's compressed
- * encoding), not the route itself. Revisit if Phase 6's Tier 1 grid needs
- * nested/parameterised routes this can't express cleanly.
+ * A hash router in ~30 lines rather than a routing library. With the app
+ * narrowed to two modules (REIT income, SIP & SWP) plus a landing page,
+ * there's even less surface here than when this file originally argued
+ * against a routing dependency — `#/calc-reit-portfolio` is exactly as
+ * bookmarkable and shareable as anything react-router would give.
+ *
+ * Pruned down from the original nine-route app (the flagship Comparator,
+ * the Tier 1 grid and its eight calculators) per the decision to ship only
+ * the two Graphite modules — see claude/decisions-and-workflow.md.
  */
 import { useEffect, useState } from 'react';
 
-export type RouteId =
-  | 'home'
-  | 'afford'
-  | 'rent-vs-buy'
-  | 'comparator'
-  | 'retirement'
-  | 'calculators'
-  | 'calc-emi'
-  | 'calc-loan-refinance'
-  | 'calc-sip'
-  | 'calc-fixed-income'
-  | 'calc-income-tax'
-  | 'calc-capital-gains'
-  | 'calc-inflation'
-  | 'calc-reit-portfolio'
-  | 'calc-sip-swp';
+export type RouteId = 'home' | 'calc-reit-portfolio' | 'calc-sip-swp';
 
-const VALID_ROUTES: readonly RouteId[] = [
-  'home',
-  'afford',
-  'rent-vs-buy',
-  'comparator',
-  'retirement',
-  'calculators',
-  'calc-emi',
-  'calc-loan-refinance',
-  'calc-sip',
-  'calc-fixed-income',
-  'calc-income-tax',
-  'calc-capital-gains',
-  'calc-inflation',
-  'calc-reit-portfolio',
-  'calc-sip-swp',
-];
+const VALID_ROUTES: readonly RouteId[] = ['home', 'calc-reit-portfolio', 'calc-sip-swp'];
 
 function isRouteId(value: string): value is RouteId {
   return (VALID_ROUTES as readonly string[]).includes(value);

@@ -4,10 +4,9 @@ import type { SipSwpHoldingType, SipSwpScenario, SipSwpSellFrom, SipSwpWithdrawa
  * Illustrative, non-cited defaults for the SIP & SWP planner — the five
  * example holdings, four allocation presets and their weights, and the
  * fixed-deposit comparison rate — ported verbatim from the prototype's own
- * `HOLD`/`PRESETS`/`DEFAULTS.fd` objects (sip-swp-planner.html). Same tier
- * as `monte-carlo-assumptions.ts`'s volatility figures and
- * `scenario-builder.ts`'s `HOME_LOAN_RATE`: a documented starting point the
- * user is expected to edit (every holding's return, expense ratio and
+ * `HOLD`/`PRESETS`/`DEFAULTS.fd` objects (sip-swp-planner.html). A
+ * documented starting point the user is expected to edit (every holding's
+ * return, expense ratio and
  * allocation is a live form field), not sourced market data. Lives in
  * `apps/web/src/lib`, not `packages/data`, for the same reason those two
  * do — illustrative UI defaults aren't a cited rule pack.

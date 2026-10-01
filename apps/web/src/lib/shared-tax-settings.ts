@@ -22,8 +22,9 @@ import { getCapitalGainsRules } from '@fincalc/data';
  * module doc comment for the citations. Slab rate (31.2% = 30% + 4% cess,
  * the new regime's top slab) and inflation (6%/year) are not sourced from
  * any data pack — they're a household's own assumption, same tier as this
- * project's other illustrative defaults (`scenario-builder.ts`'s
- * `HOME_LOAN_RATE`, `monte-carlo-assumptions.ts`'s volatility figures).
+ * project's other illustrative defaults, same tier as `sip-swp-assumptions.ts`'s
+ * example holdings and allocation presets — a documented starting point,
+ * not sourced data.
  *
  * Caveat (B3, deliberately NOT modelled here): the real ₹1.25L equity LTCG
  * exemption is one shared annual allowance across every equity-like gain a
