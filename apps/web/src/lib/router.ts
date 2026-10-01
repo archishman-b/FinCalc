@@ -23,7 +23,8 @@ export type RouteId =
   | 'calc-income-tax'
   | 'calc-capital-gains'
   | 'calc-inflation'
-  | 'calc-reit-portfolio';
+  | 'calc-reit-portfolio'
+  | 'calc-sip-swp';
 
 const VALID_ROUTES: readonly RouteId[] = [
   'home',
@@ -40,6 +41,7 @@ const VALID_ROUTES: readonly RouteId[] = [
   'calc-capital-gains',
   'calc-inflation',
   'calc-reit-portfolio',
+  'calc-sip-swp',
 ];
 
 function isRouteId(value: string): value is RouteId {

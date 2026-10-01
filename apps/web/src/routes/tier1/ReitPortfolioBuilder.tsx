@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   Bar,
   CartesianGrid,
@@ -25,20 +25,28 @@ import {
   type ReitPortfolioYearRow,
 } from '@fincalc/engine';
 
+import { GraphiteModuleHeader, TickerItem, TickerLabel } from '../../components/GraphiteModuleHeader';
+import { GRAPHITE_CSS_VARS, graphiteChartColors, useGraphiteTheme, type GraphiteTheme } from '../../lib/graphite-theme';
+
 /**
  * REIT Portfolio Builder — a full port of a hand-built single-file
  * prototype (reit-simulator.html, saved as a project doc) the user
  * verified separately and treated as the spec, not code to copy. This
  * route follows its own "Graphite terminal" visual identity rather than
  * the rest of FinCalc's paper/ink theme (Phase 5) — scoped entirely to
- * this component via the `.reit-graphite` custom-property block below, so
- * no other route is affected. Colour values are the prototype's own
- * (light and dark), ported verbatim; the one deliberate departure is
- * typography: the prototype loads Geist/Geist Mono from Google Fonts, but
- * FinCalc's Phase 5 design plan is explicit that "nothing about the visual
- * system makes a network request" — so this uses the same system-stack
- * substitution (ui-sans-serif / ui-monospace) the rest of the app already
- * uses, rather than adding the app's first external font request.
+ * this component and the SIP & SWP module via the shared `.graphite`
+ * custom-property block (lib/graphite-theme.ts), so no other route is
+ * affected. Colour values are the prototype's own (light and dark), ported
+ * verbatim; the one deliberate departure is typography: the prototype
+ * loads Geist/Geist Mono from Google Fonts, but FinCalc's Phase 5 design
+ * plan is explicit that "nothing about the visual system makes a network
+ * request" — so this uses the same system-stack substitution (ui-sans-serif
+ * / ui-monospace) the rest of the app already uses, rather than adding the
+ * app's first external font request.
+ *
+ * The shared Graphite topbar (module tabs + theme toggle + a per-module
+ * ticker slot) lives in components/GraphiteModuleHeader.tsx — this route
+ * supplies its own ticker content (REIT name/price/yield) below.
  *
  * The simulation itself is entirely `@fincalc/engine`'s
  * `simulateReitPortfolio()` (see reit-portfolio-simulator.ts for why this
@@ -49,44 +57,6 @@ import {
  * separate, deliberately-dated snapshot from the older `reit-instruments`
  * pack — see that pack's own module doc comment for why).
  */
-
-const CSS_VARS = `
-.reit-graphite {
-  --paper:#F4F5F3; --panel:#F8F8F6; --rail:#FAFAF9; --sheet:#FFFFFF; --field:#FFFFFF;
-  --ink:#111418; --ink2:#343A42; --muted:#5A616B; --rule:#E1E3E0; --rule2:#C7CBC7;
-  --accent:#D98A00; --acctext:#935C00; --onacc:#FFFFFF; --accent-soft:#FDF3E0;
-  --warn:#B86A00; --warn-soft:#FCF1DE; --line2:#8A929E; --s3:#1F6FD1;
-  --p1bg:#E3F1EB; --p1fg:#0B5A43; --p2bg:#E4EEFB; --p2fg:#1756A5; --p3bg:#FCEFD6; --p3fg:#7A4B00; --p4bg:#EEEFEC; --p4fg:#5A616B;
-  background: var(--paper); color: var(--ink);
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-variant-numeric: tabular-nums;
-}
-.reit-graphite .num { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-@media (prefers-color-scheme: dark) {
-  .reit-graphite {
-    --paper:#0B0D10; --panel:#0F1216; --rail:#0D1013; --sheet:#12151A; --field:#0E1115;
-    --ink:#ECEEF1; --ink2:#C3C9D1; --muted:#8C95A2; --rule:#232830; --rule2:#39414C;
-    --accent:#F5A524; --acctext:#F5B547; --onacc:#1A1204; --accent-soft:#2A2210;
-    --warn:#F5A524; --warn-soft:#2A2210; --line2:#7D8795; --s3:#5AB0FF;
-    --p1bg:#1C2A25; --p1fg:#8FD9BE; --p2bg:#13263A; --p2fg:#8CC8FF; --p3bg:#34270C; --p3fg:#F5C46A; --p4bg:#1B1F26; --p4fg:#8C95A2;
-  }
-}
-.reit-graphite input[type=range] { accent-color: var(--accent); }
-`;
-
-/** Mirrors apps/web/src/lib/theme.ts's usePalette() pattern, but for this route's own Graphite hex values (charts here don't use the shared paper/ink palette — see the module doc comment above). */
-function useGraphiteChartColors() {
-  const [dark, setDark] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = () => setDark(mq.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-  return dark
-    ? { line2: '#8A929E', accent: '#F5A524', s3: '#5AB0FF', rule: '#232830', ink2: '#C3C9D1', paper: '#12151A' }
-    : { line2: '#8A929E', accent: '#D98A00', s3: '#1F6FD1', rule: '#E1E3E0', ink2: '#343A42', paper: '#FFFFFF' };
-}
 
 function rupee(v: number): string {
   return formatINR(v, { decimals: 0 });
@@ -346,13 +316,15 @@ function StrategyLinesChart({
   valueOf,
   ariaLabel,
   formatter,
+  theme,
 }: {
   results: Record<ReitPortfolioStrategy, ReitPortfolioSimulationResult>;
   valueOf: (row: ReitPortfolioYearRow) => number;
   ariaLabel: string;
   formatter: (v: number) => string;
+  theme: GraphiteTheme;
 }) {
-  const colors = useGraphiteChartColors();
+  const colors = graphiteChartColors(theme);
   const strategyColor: Record<ReitPortfolioStrategy, string> = { withdraw: colors.line2, reinvest_harvest: colors.accent, auto_offramp: colors.s3 };
   const years = results.withdraw.yearly.map((r) => r.year);
   const data = years.map((year, i) => {
@@ -391,8 +363,16 @@ function StrategyLinesChart({
   );
 }
 
-function OutOfPocketChart({ results, ariaLabel }: { results: Record<ReitPortfolioStrategy, ReitPortfolioSimulationResult>; ariaLabel: string }) {
-  const colors = useGraphiteChartColors();
+function OutOfPocketChart({
+  results,
+  ariaLabel,
+  theme,
+}: {
+  results: Record<ReitPortfolioStrategy, ReitPortfolioSimulationResult>;
+  ariaLabel: string;
+  theme: GraphiteTheme;
+}) {
+  const colors = graphiteChartColors(theme);
   const years = results.withdraw.yearly.map((r) => r.year);
   const data = years.map((year, i) => ({
     year,
@@ -421,6 +401,7 @@ function OutOfPocketChart({ results, ariaLabel }: { results: Record<ReitPortfoli
 /* ---------- main route ---------- */
 
 export function ReitPortfolioBuilder() {
+  const { theme, toggle: toggleTheme } = useGraphiteTheme();
   const [form, setForm] = useState<FormState>(() => defaultFormState());
   const [showFutureRupees, setShowFutureRupees] = useState(false);
   const [incomeView, setIncomeView] = useState<'payouts' | 'cash'>('payouts');
@@ -503,11 +484,27 @@ export function ReitPortfolioBuilder() {
   const bestResult = results[best];
   const deflator = showFutureRupees ? 1 : bestResult.inflationDeflatorAtHorizon;
 
-  return (
-    <div className="reit-graphite -m-4 min-h-screen p-4 sm:p-6">
-      <style>{CSS_VARS}</style>
+  const tickerContent = hasReits && (
+    <>
+      <TickerLabel>Inputs · {asOf}</TickerLabel>
+      {activeReits.map((r) => (
+        <TickerItem key={r.id} label={r.name} value={formatINR(r.priceInr, { decimals: 2 })} highlight={pct(r.yieldPct)} />
+      ))}
+    </>
+  );
 
-      <div className="mx-auto max-w-[1400px]">
+  return (
+    <div className="graphite -m-4 min-h-screen" data-theme={theme}>
+      <style>{GRAPHITE_CSS_VARS}</style>
+      <GraphiteModuleHeader
+        active="reit"
+        moduleLabel="REIT income simulator"
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        ticker={tickerContent}
+      />
+
+      <div className="mx-auto max-w-[1400px] p-4 sm:p-6">
         <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)' }}>
           {form.horizonYears}-year outlook · {showFutureRupees ? 'future rupees' : "today's rupees"}
         </div>
@@ -785,6 +782,7 @@ export function ReitPortfolioBuilder() {
                 valueOf={(row) => (showFutureRupees ? row.valueNominalInr : row.valueRealInr)}
                 ariaLabel="Portfolio value by year for the three strategies"
                 formatter={rupeeCompact}
+                theme={theme}
               />
             </Card>
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -798,11 +796,12 @@ export function ReitPortfolioBuilder() {
                   valueOf={(row) => (incomeView === 'cash' ? (showFutureRupees ? row.cashTakenThisYearNominalInr : row.cashTakenThisYearRealInr) : showFutureRupees ? row.postTaxPayoutsThisYearNominalInr : row.postTaxPayoutsThisYearRealInr) / 12}
                   ariaLabel="Monthly income by year for the three strategies"
                   formatter={rupee}
+                  theme={theme}
                 />
               </Card>
               <Card>
                 <h3 className="mb-2 text-sm font-semibold">What you pay in each month</h3>
-                <OutOfPocketChart results={results} ariaLabel="Monthly out-of-pocket SIP by year for the three strategies" />
+                <OutOfPocketChart results={results} ariaLabel="Monthly out-of-pocket SIP by year for the three strategies" theme={theme} />
               </Card>
             </div>
 

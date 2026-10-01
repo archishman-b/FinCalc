@@ -34,6 +34,7 @@ const InflationCalculator = lazy(() =>
 const ReitPortfolioBuilder = lazy(() =>
   import('./routes/tier1/ReitPortfolioBuilder').then((m) => ({ default: m.ReitPortfolioBuilder })),
 );
+const SipSwpPlanner = lazy(() => import('./routes/tier1/SipSwpPlanner').then((m) => ({ default: m.SipSwpPlanner })));
 
 const LOADING = <div className="px-5 py-10 text-ink-muted sm:px-8">Loading…</div>;
 
@@ -103,6 +104,11 @@ export function App() {
       {route === 'calc-reit-portfolio' && (
         <Suspense fallback={LOADING}>
           <ReitPortfolioBuilder />
+        </Suspense>
+      )}
+      {route === 'calc-sip-swp' && (
+        <Suspense fallback={LOADING}>
+          <SipSwpPlanner />
         </Suspense>
       )}
       {(route === 'afford' || route === 'retirement') && <ComingSoon route={route} />}
