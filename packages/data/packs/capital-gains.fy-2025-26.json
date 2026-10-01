@@ -33,6 +33,11 @@
       "source": "https://www.taxscan.in/hudco-bonds-now-eligible-for-capital-gains-tax-exemption-u-s-54ec-cbdt/505655",
       "verifiedOn": "2026-09-15",
       "note": "CBDT Notification No. 31/2025 [S.O. 1644(E)], 7 April 2025, added HUDCO bonds issued on/after 1 April 2025 (5-year redemption) alongside the pre-existing NHAI/REC/PFC/IRFC bonds. Continuity into new-Act Section 85 for FY2026-27 is inferred (no contrary evidence found), not directly confirmed."
+    },
+    "otherAssets": {
+      "source": "https://taxguru.in/income-tax/gold-etf-silver-etf-gold-silver-mutual-fund-taxation-india-complete-guide-income-tax-act-2025.html",
+      "verifiedOn": "2026-09-30",
+      "note": "Units of a non-equity-oriented mutual fund scheme not held as a listed security — gold/silver fund-of-funds, international equity funds-of-funds, hybrid funds — get LTCG at 12.5% with no indexation once held over 24 months, unchanged since the Finance (No.2) Act 2024 rate applies to any transfer on/after 23 July 2024 regardless of FY; short-term gains (held 24 months or less) are taxed at the household's ordinary slab rate, with no separate flat short-term rate. Distinct from a *listed* gold/silver ETF, which instead gets the 12-month listed-securities threshold per the same source — this pack's `otherAssets` bucket models the SIP & SWP planner's generic non-equity, non-specified-debt holding category (hybrid/gold/international funds), which for most retail investors means the unlisted fund-of-funds route, not a literal exchange-listed ETF."
     }
   },
   "rules": {
@@ -75,6 +80,11 @@
       "ltcgRate": 0.125,
       "ltcgExemptionPerYear": null,
       "stcgRate": 0.2
+    },
+    "otherAssets": {
+      "holdingPeriodMonthsForLtcg": 24,
+      "ltcgRate": 0.125,
+      "stcgTaxedAtSlabRate": true
     },
     "section54": {
       "actSection": "54 (Income-tax Act, 1961)",

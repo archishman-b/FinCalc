@@ -25,8 +25,10 @@ import {
   type ReitPortfolioYearRow,
 } from '@fincalc/engine';
 
+import { Card, FieldRow, Segmented, SliderField, Stepper } from '../../components/GraphiteFields';
 import { GraphiteModuleHeader, TickerItem, TickerLabel } from '../../components/GraphiteModuleHeader';
 import { GRAPHITE_CSS_VARS, graphiteChartColors, useGraphiteTheme, type GraphiteTheme } from '../../lib/graphite-theme';
+import { useSharedTaxSettings, type SharedTaxSettings } from '../../lib/shared-tax-settings';
 
 /**
  * REIT Portfolio Builder — a full port of a hand-built single-file
@@ -128,13 +130,7 @@ interface FormState {
   unitPriceGrowthPct: number;
   tieDistributionGrowthToPrice: boolean;
   distributionGrowthPct: number;
-  inflationPct: number;
-  slabRatePct: number;
   taxDividendComponent: boolean;
-  ltcgRatePct: number;
-  stcgRatePct: number;
-  ltcgExemptionInr: number;
-  capitalGainsCessPct: number;
   reinvestmentSplit: 'allocation' | 'same_reit';
   rentalGrossYieldPct: number;
   rentalVacancyMonths: number;
@@ -155,13 +151,7 @@ function defaultFormState(): FormState {
     unitPriceGrowthPct: 3,
     tieDistributionGrowthToPrice: true,
     distributionGrowthPct: 3,
-    inflationPct: 6,
-    slabRatePct: 31.2,
     taxDividendComponent: false,
-    ltcgRatePct: 12.5,
-    stcgRatePct: 20,
-    ltcgExemptionInr: 125_000,
-    capitalGainsCessPct: 4,
     reinvestmentSplit: 'allocation',
     rentalGrossYieldPct: 3,
     rentalVacancyMonths: 1,
@@ -170,7 +160,7 @@ function defaultFormState(): FormState {
   };
 }
 
-function toSimulatorInput(form: FormState): ReitPortfolioSimulatorInput {
+function toSimulatorInput(form: FormState, tax: SharedTaxSettings): ReitPortfolioSimulatorInput {
   const reits: ReitPortfolioSimulatorReitInput[] = form.reits
     .filter((r) => r.on)
     .map((r) => ({
@@ -197,110 +187,22 @@ function toSimulatorInput(form: FormState): ReitPortfolioSimulatorInput {
     unitPriceGrowthPct: form.unitPriceGrowthPct,
     tieDistributionGrowthToPrice: form.tieDistributionGrowthToPrice,
     distributionGrowthPct: form.distributionGrowthPct,
-    inflationPct: form.inflationPct,
-    slabRatePct: form.slabRatePct,
+    inflationPct: tax.inflationPct,
+    slabRatePct: tax.slabRatePct,
     taxDividendComponent: form.taxDividendComponent,
-    ltcgRatePct: form.ltcgRatePct,
-    stcgRatePct: form.stcgRatePct,
-    ltcgExemptionInr: form.ltcgExemptionInr,
-    capitalGainsCessPct: form.capitalGainsCessPct,
+    ltcgRatePct: tax.equityLtcgRatePct,
+    stcgRatePct: tax.equityStcgRatePct,
+    ltcgExemptionInr: tax.equityLtcgExemptionInr,
+    capitalGainsCessPct: tax.capitalGainsCessPct,
     reinvestmentSplit: form.reinvestmentSplit,
   };
 }
 
-/* ---------- small local field components (Graphite-themed) ---------- */
-
-function FieldRow({ label, hint, children }: { label: string; hint?: string | undefined; children: React.ReactNode }) {
-  return (
-    <div className="mb-2.5 grid grid-cols-[minmax(0,1fr)_104px] items-center gap-2.5">
-      <label className="text-xs" style={{ color: 'var(--ink2)' }}>
-        {label}
-        {hint && <small className="mt-0.5 block text-[10.5px] leading-snug" style={{ color: 'var(--muted)' }}>{hint}</small>}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function Stepper({ value, onChange, step = 1, min, max, suffix }: { value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number; suffix?: string | undefined }) {
-  const clamp = (v: number) => Math.max(min ?? -Infinity, Math.min(max ?? Infinity, v));
-  return (
-    <div className="relative">
-      <input
-        type="number"
-        value={Number.isFinite(value) ? value : 0}
-        step={step}
-        min={min}
-        max={max}
-        onChange={(e) => onChange(clamp(parseFloat(e.target.value) || 0))}
-        className="num h-8 w-full rounded border pr-6 text-right text-[12.5px] font-medium"
-        style={{ background: 'var(--field)', borderColor: 'var(--rule)', color: 'var(--ink)' }}
-      />
-      {suffix && (
-        <span className="pointer-events-none absolute right-7 top-1/2 -translate-y-1/2 text-[11px]" style={{ color: 'var(--muted)' }}>
-          {suffix}
-        </span>
-      )}
-      <span className="absolute right-0 top-0 flex h-full w-5 flex-col border-l" style={{ borderColor: 'var(--rule)' }}>
-        <button type="button" tabIndex={-1} onClick={() => onChange(clamp(value + step))} className="flex-1 text-[9px]" style={{ color: 'var(--muted)' }} aria-label="Increase">
-          ▲
-        </button>
-        <button type="button" tabIndex={-1} onClick={() => onChange(clamp(value - step))} className="flex-1 border-t text-[9px]" style={{ borderColor: 'var(--rule)', color: 'var(--muted)' }} aria-label="Decrease">
-          ▼
-        </button>
-      </span>
-    </div>
-  );
-}
-
-function SliderField({ label, hint, value, onChange, min, max, step, suffix }: { label: string; hint?: string; value: number; onChange: (v: number) => void; min: number; max: number; step: number; suffix?: string }) {
-  return (
-    <div className="mb-3">
-      <FieldRow label={label} hint={hint}>
-        <Stepper value={value} onChange={onChange} step={step} min={min} max={max} suffix={suffix} />
-      </FieldRow>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={Number.isFinite(value) ? value : min}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="mt-[-6px] w-full"
-      />
-      <div className="mt-0.5 flex justify-between text-[10px] num" style={{ color: 'var(--muted)' }}>
-        <span>{min}{suffix ?? ''}</span>
-        <span>{max}{suffix ?? ''}</span>
-      </div>
-    </div>
-  );
-}
-
-function Segmented<T extends string>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
-  return (
-    <div className="inline-flex gap-0.5 rounded-lg border p-0.5" style={{ background: 'var(--panel)', borderColor: 'var(--rule)' }}>
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          className="rounded px-2.5 py-1 text-xs font-medium"
-          style={value === o.value ? { background: 'var(--sheet)', color: 'var(--ink)', boxShadow: '0 1px 2px rgba(17,20,24,.08)' } : { color: 'var(--muted)' }}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-lg border p-5 ${className}`} style={{ background: 'var(--sheet)', borderColor: 'var(--rule)', boxShadow: '0 1px 2px rgba(17,20,24,.04)' }}>
-      {children}
-    </div>
-  );
-}
+/* `FieldRow`/`Stepper`/`SliderField`/`Segmented`/`Card` used to be defined here, as
+   private, unexported functions — extracted to `components/GraphiteFields.tsx` once
+   the SIP & SWP planner needed the identical Graphite-themed building blocks, so both
+   routes share one copy rather than two that could drift. See that file's own module
+   doc comment. */
 
 /* ---------- charts: 3-strategy line comparisons, Graphite-coloured ---------- */
 
@@ -402,13 +304,14 @@ function OutOfPocketChart({
 
 export function ReitPortfolioBuilder() {
   const { theme, toggle: toggleTheme } = useGraphiteTheme();
+  const taxSettings = useSharedTaxSettings();
   const [form, setForm] = useState<FormState>(() => defaultFormState());
   const [showFutureRupees, setShowFutureRupees] = useState(false);
   const [incomeView, setIncomeView] = useState<'payouts' | 'cash'>('payouts');
   const [ybyTab, setYbyTab] = useState<ReitPortfolioStrategy | 'compare'>('auto_offramp');
   const [allocationPreset, setAllocationPreset] = useState<'equal' | 'yield' | 'growth' | 'custom'>('equal');
 
-  const simulatorInput = useMemo(() => toSimulatorInput(form), [form]);
+  const simulatorInput = useMemo(() => toSimulatorInput(form, taxSettings.settings), [form, taxSettings.settings]);
   const results = useMemo<Record<ReitPortfolioStrategy, ReitPortfolioSimulationResult>>(
     () => ({
       withdraw: simulateReitPortfolio(simulatorInput, 'withdraw'),
@@ -428,9 +331,9 @@ export function ReitPortfolioBuilder() {
         vacancyMonthsPerYear: form.rentalVacancyMonths,
         maintenancePctOfGrossYield: form.rentalMaintenancePct,
         propertyTaxPctOfGrossYield: form.rentalPropertyTaxPct,
-        slabRatePct: form.slabRatePct,
+        slabRatePct: taxSettings.settings.slabRatePct,
       }),
-    [form.rentalGrossYieldPct, form.rentalVacancyMonths, form.rentalMaintenancePct, form.rentalPropertyTaxPct, form.slabRatePct],
+    [form.rentalGrossYieldPct, form.rentalVacancyMonths, form.rentalMaintenancePct, form.rentalPropertyTaxPct, taxSettings.settings.slabRatePct],
   );
 
   const portfolioYieldToday = useMemo(() => {
@@ -441,10 +344,10 @@ export function ReitPortfolioBuilder() {
     for (const r of activeReits) {
       const w = Math.max(0, r.weightPct) / weightSum;
       grossPct += w * r.yieldPct;
-      netPct += w * reitPostTaxYieldPct(toYieldInput(r), form.slabRatePct, form.taxDividendComponent);
+      netPct += w * reitPostTaxYieldPct(toYieldInput(r), taxSettings.settings.slabRatePct, form.taxDividendComponent);
     }
     return { grossPct, netPct };
-  }, [activeReits, form.slabRatePct, form.taxDividendComponent]);
+  }, [activeReits, taxSettings.settings.slabRatePct, form.taxDividendComponent]);
 
   const best = STRATEGY_ORDER.reduce((a, s) => (results[s].netResultTodayInr > results[a].netResultTodayInr ? s : a), 'withdraw' as ReitPortfolioStrategy);
 
@@ -461,7 +364,7 @@ export function ReitPortfolioBuilder() {
       if (preset === 'equal') {
         weights = on.map(() => 100 / on.length);
       } else if (preset === 'yield') {
-        weights = rankWeights(on, (r) => reitPostTaxYieldPct(toYieldInput(r), f.slabRatePct, f.taxDividendComponent));
+        weights = rankWeights(on, (r) => reitPostTaxYieldPct(toYieldInput(r), taxSettings.settings.slabRatePct, f.taxDividendComponent));
       } else {
         const growths = on.map((r) => r.growthOverridePct ?? f.unitPriceGrowthPct);
         const sameGrowth = growths.every((g) => Math.abs(g - growths[0]!) < 1e-9);
@@ -580,13 +483,22 @@ export function ReitPortfolioBuilder() {
                 <Stepper value={form.distributionGrowthPct} onChange={(v) => setForm((f) => ({ ...f, distributionGrowthPct: v }))} step={0.1} min={-20} max={30} suffix="%" />
               </FieldRow>
             )}
-            <SliderField label="Inflation" hint="% a year" value={form.inflationPct} onChange={(v) => setForm((f) => ({ ...f, inflationPct: v }))} min={0} max={12} step={0.5} suffix="%" />
+            <SliderField
+              label="Inflation"
+              hint="% a year · shared with the SIP & SWP module"
+              value={taxSettings.settings.inflationPct}
+              onChange={(v) => taxSettings.updateSettings({ inflationPct: v })}
+              min={0}
+              max={12}
+              step={0.5}
+              suffix="%"
+            />
 
             <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
-              Tax
+              Tax <span className="font-normal normal-case" style={{ color: 'var(--muted)' }}>· shared with SIP &amp; SWP</span>
             </h2>
             <FieldRow label="Tax on interest & other income" hint="30% + 4% cess = 31.2">
-              <Stepper value={form.slabRatePct} onChange={(v) => setForm((f) => ({ ...f, slabRatePct: v }))} step={0.01} min={0} max={45} suffix="%" />
+              <Stepper value={taxSettings.settings.slabRatePct} onChange={(v) => taxSettings.updateSettings({ slabRatePct: v })} step={0.01} min={0} max={45} suffix="%" />
             </FieldRow>
             <label className="mb-2.5 flex cursor-pointer items-start gap-2 text-xs" style={{ color: 'var(--ink2)' }}>
               <input type="checkbox" checked={form.taxDividendComponent} onChange={(e) => setForm((f) => ({ ...f, taxDividendComponent: e.target.checked }))} className="mt-0.5" />
@@ -598,16 +510,16 @@ export function ReitPortfolioBuilder() {
               </span>
             </label>
             <FieldRow label="Long-term gains rate" hint="held over 12 months">
-              <Stepper value={form.ltcgRatePct} onChange={(v) => setForm((f) => ({ ...f, ltcgRatePct: v }))} step={0.1} min={0} max={40} suffix="%" />
+              <Stepper value={taxSettings.settings.equityLtcgRatePct} onChange={(v) => taxSettings.updateSettings({ equityLtcgRatePct: v })} step={0.1} min={0} max={40} suffix="%" />
             </FieldRow>
             <FieldRow label="Short-term gains rate">
-              <Stepper value={form.stcgRatePct} onChange={(v) => setForm((f) => ({ ...f, stcgRatePct: v }))} step={0.1} min={0} max={40} suffix="%" />
+              <Stepper value={taxSettings.settings.equityStcgRatePct} onChange={(v) => taxSettings.updateSettings({ equityStcgRatePct: v })} step={0.1} min={0} max={40} suffix="%" />
             </FieldRow>
             <FieldRow label="Long-term gains exempt (₹)">
-              <Stepper value={form.ltcgExemptionInr} onChange={(v) => setForm((f) => ({ ...f, ltcgExemptionInr: v }))} step={5_000} min={0} />
+              <Stepper value={taxSettings.settings.equityLtcgExemptionInr} onChange={(v) => taxSettings.updateSettings({ equityLtcgExemptionInr: v })} step={5_000} min={0} />
             </FieldRow>
             <FieldRow label="Cess on gains tax">
-              <Stepper value={form.capitalGainsCessPct} onChange={(v) => setForm((f) => ({ ...f, capitalGainsCessPct: v }))} step={0.1} min={0} max={10} suffix="%" />
+              <Stepper value={taxSettings.settings.capitalGainsCessPct} onChange={(v) => taxSettings.updateSettings({ capitalGainsCessPct: v })} step={0.1} min={0} max={10} suffix="%" />
             </FieldRow>
 
             <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
@@ -1081,6 +993,7 @@ export function ReitPortfolioBuilder() {
                 <li>Off-ramp test (strategy 3): after each quarterly payout, the post-tax payout across all REITs divided by 3 is compared with your total monthly SIP, step-up included. Once it's equal or higher, the SIP stops for the rest of the window and doesn't restart.</li>
                 <li>"Net result" is the value if sold after gains tax, plus all cash you took, minus all money you put in, each converted to today's rupees at the date it happened. Gains tax applies lot by lot: units held over 12 months at the long-term rate after the exemption, the rest at the short-term rate, plus cess.</li>
                 <li>Rental comparison: rent collected for (12 − vacancy) months, less property tax and landlord maintenance; taxed at your rate on 70% of (rent less property tax), per the 30% standard deduction. It compares income only — property price growth, loans and exit costs are left to the full Allocation Comparator.</li>
+                <li>Slab rate, long/short-term gains rates, the gains exemption and inflation are shared with the SIP &amp; SWP module (editing either module updates both). The ₹1.25 lakh exemption is one real-life shared annual allowance across every equity-like gain a person realises — direct equity, equity funds, REIT/InvIT units — and this tool does not net the two modules' exposure against each other, so adding both modules' results together would double-count it.</li>
               </ul>
             </Card>
           </main>

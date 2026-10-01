@@ -1,9 +1,11 @@
 /**
  * Capital-gains computation: equity/REIT LTCG & STCG, debt-fund gains
  * (post-2023 slab taxation, with the pre-2023 grandfathered LTCG carve-out),
- * property LTCG — including the post-23-July-2024 transitional 12.5%-no-
- * indexation vs 20%-with-indexation choice — and the Section 54/54F/54EC
- * reinvestment exemptions.
+ * other non-equity-oriented fund units (hybrid/gold/international — LTCG
+ * only, no exemption, no separate short-term rate), property LTCG —
+ * including the post-23-July-2024 transitional 12.5%-no-indexation vs
+ * 20%-with-indexation choice — and the Section 54/54F/54EC reinvestment
+ * exemptions.
  *
  * `rules` is whichever FY's `CapitalGainsRules` pack (`@fincalc/data`) the
  * caller resolved via `getCapitalGainsRules(fy)`; `cii` is the shared,
@@ -85,6 +87,21 @@ export function reitGainsTax(input: EquityLikeGainInput, rules: CapitalGainsRule
   if (input.holdingMonths < rules.holdingPeriodMonthsForLtcg) return flat(input.gain, rules.stcgRate);
   const exemption = rules.ltcgExemptionPerYear ?? 0;
   return flat(Math.max(0, input.gain - exemption), rules.ltcgRate);
+}
+
+/**
+ * Units of a non-equity-oriented fund not covered above (hybrid, gold/silver
+ * fund-of-funds, international equity fund-of-funds — see `OtherAssetGainsRules`'s
+ * own doc comment in `@fincalc/data`). Shaped differently from `equityGainsTax`/
+ * `reitGainsTax`: there's no annual exemption, and short-term gains have no
+ * separate flat rate at all — they're ordinary slab income, same as
+ * `debtFundGainsTax`'s always-slab branch. Only the long-term gain gets the
+ * flat, un-indexed rate.
+ */
+export function otherAssetGainsTax(input: EquityLikeGainInput, rules: CapitalGainsRules['otherAssets']): GainTaxResult {
+  if (input.gain <= 0) return slab(0);
+  if (input.holdingMonths < rules.holdingPeriodMonthsForLtcg) return slab(input.gain);
+  return flat(input.gain, rules.ltcgRate);
 }
 
 export interface DebtFundGainInput {

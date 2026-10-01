@@ -8,6 +8,7 @@ export * from './inflation';
 export * from './tax';
 export * from './positions';
 export * from './reit-portfolio-simulator';
+export * from './sip-swp-simulator';
 export * from './rental-yield-comparison';
 export * from './comparator';
 
