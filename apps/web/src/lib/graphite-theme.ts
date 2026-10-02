@@ -52,6 +52,43 @@ export const GRAPHITE_CSS_VARS = `
   --p1bg:#1C2A25; --p1fg:#8FD9BE; --p2bg:#13263A; --p2fg:#8CC8FF; --p3bg:#34270C; --p3fg:#F5C46A; --p4bg:#1B1F26; --p4fg:#8C95A2;
 }
 .graphite input[type=range] { accent-color: var(--accent); }
+
+/* Native number-input spinners are suppressed here because every numeric
+   field in both Graphite modules is a Stepper (GraphiteFields.tsx), which
+   already draws its own themed up/down button pair — leaving the browser's
+   native spinner in place doubled up visibly as two overlapping sets of
+   arrows in the same field. */
+.graphite input[type=number]::-webkit-inner-spin-button,
+.graphite input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.graphite input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Thin, theme-matched scrollbar for an internally-scrolling panel (the
+   control-panel sidebar's own independent scroll — see the \`aside\` in
+   ReitPortfolioBuilder.tsx/SipSwpPlanner.tsx). Firefox via the standard
+   properties, WebKit/Blink via the vendor pseudo-elements; both degrade
+   harmlessly to each browser's default thin scrollbar if unsupported. */
+.graphite-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule2) transparent;
+}
+.graphite-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.graphite-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.graphite-scroll::-webkit-scrollbar-thumb {
+  background: var(--rule2);
+  border-radius: 999px;
+}
+.graphite-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
 `;
 
 const STORAGE_KEY = 'fincalc-graphite-theme';

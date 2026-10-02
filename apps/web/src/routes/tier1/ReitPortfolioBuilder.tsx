@@ -393,7 +393,10 @@ export function ReitPortfolioBuilder() {
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
           {/* ---------- sidebar / assumptions ---------- */}
-          <aside className="rounded-lg border p-4" style={{ background: 'var(--rail)', borderColor: 'var(--rule)' }}>
+          <aside
+            className="graphite-scroll rounded-lg border p-4 lg:sticky lg:top-[76px] lg:max-h-[calc(100vh-100px)] lg:overflow-y-auto"
+            style={{ background: 'var(--rail)', borderColor: 'var(--rule)' }}
+          >
             <h2 className="mb-2 mt-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)' }}>
               Money in · total
             </h2>
