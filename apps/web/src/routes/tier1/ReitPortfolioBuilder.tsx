@@ -1,6 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
 import {
-  Bar,
   CartesianGrid,
   ComposedChart,
   Legend,
@@ -259,41 +258,6 @@ function StrategyLinesChart({
               {...(s === 'auto_offramp' ? { strokeDasharray: '5 4' } : {})}
             />
           ))}
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function OutOfPocketChart({
-  results,
-  ariaLabel,
-  theme,
-}: {
-  results: Record<ReitPortfolioStrategy, ReitPortfolioSimulationResult>;
-  ariaLabel: string;
-  theme: GraphiteTheme;
-}) {
-  const colors = graphiteChartColors(theme);
-  const years = results.withdraw.yearly.map((r) => r.year);
-  const data = years.map((year, i) => ({
-    year,
-    withdraw: results.withdraw.yearly[i]!.outOfPocketThisYearNominalInr / 12,
-    reinvest_harvest: results.reinvest_harvest.yearly[i]!.outOfPocketThisYearNominalInr / 12,
-    auto_offramp: results.auto_offramp.yearly[i]!.outOfPocketThisYearNominalInr / 12,
-  }));
-  return (
-    <div className="h-64 w-full" role="img" aria-label={ariaLabel}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={colors.rule} vertical={false} />
-          <XAxis dataKey="year" tickFormatter={(v: number) => `Yr ${v}`} tick={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fill: colors.ink2 }} axisLine={{ stroke: colors.rule }} tickLine={false} />
-          <YAxis tickFormatter={(v: number) => rupeeCompact(v)} tick={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fill: colors.ink2 }} axisLine={false} tickLine={false} width={60} />
-          <Tooltip formatter={(v, name) => [rupee(Number(v)), STRATEGY_LABELS[name as ReitPortfolioStrategy] ?? String(name)]} labelFormatter={(v) => `Year ${v}`} contentStyle={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, background: colors.paper, border: `1px solid ${colors.rule}`, borderRadius: 4 }} />
-          <Legend formatter={(v) => STRATEGY_LABELS[v as ReitPortfolioStrategy] ?? v} wrapperStyle={{ fontSize: 11.5, fontFamily: 'ui-sans-serif, system-ui, sans-serif' }} />
-          <Bar isAnimationActive={false} dataKey="withdraw" name="withdraw" fill={colors.line2} fillOpacity={0.7} />
-          <Bar isAnimationActive={false} dataKey="reinvest_harvest" name="reinvest_harvest" fill={colors.accent} fillOpacity={0.7} />
-          <Bar isAnimationActive={false} dataKey="auto_offramp" name="auto_offramp" fill={colors.s3} fillOpacity={0.7} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -713,7 +677,13 @@ export function ReitPortfolioBuilder() {
               </Card>
               <Card>
                 <h3 className="mb-2 text-sm font-semibold">What you pay in each month</h3>
-                <OutOfPocketChart results={results} ariaLabel="Monthly out-of-pocket SIP by year for the three strategies" theme={theme} />
+                <StrategyLinesChart
+                  results={results}
+                  valueOf={(row) => row.outOfPocketThisYearNominalInr / 12}
+                  ariaLabel="Monthly out-of-pocket SIP by year for the three strategies"
+                  formatter={rupee}
+                  theme={theme}
+                />
               </Card>
             </div>
 
