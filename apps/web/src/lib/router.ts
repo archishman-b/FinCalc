@@ -1,19 +1,20 @@
 /**
  * A hash router in ~30 lines rather than a routing library. With the app
- * narrowed to two modules (REIT income, SIP & SWP) plus a landing page,
- * there's even less surface here than when this file originally argued
- * against a routing dependency — `#/calc-reit-portfolio` is exactly as
- * bookmarkable and shareable as anything react-router would give.
+ * narrowed to four modules (REIT income, SIP & SWP, EPF & VPF, NPS) plus a
+ * landing page, there's still barely more surface here than when this file
+ * originally argued against a routing dependency — `#/calc-reit-portfolio`
+ * is exactly as bookmarkable and shareable as anything react-router would
+ * give.
  *
  * Pruned down from the original nine-route app (the flagship Comparator,
  * the Tier 1 grid and its eight calculators) per the decision to ship only
- * the two Graphite modules — see claude/decisions-and-workflow.md.
+ * the Graphite modules — see claude/decisions-and-workflow.md.
  */
 import { useEffect, useState } from 'react';
 
-export type RouteId = 'home' | 'calc-reit-portfolio' | 'calc-sip-swp';
+export type RouteId = 'home' | 'calc-reit-portfolio' | 'calc-sip-swp' | 'calc-epf-vpf' | 'calc-nps';
 
-const VALID_ROUTES: readonly RouteId[] = ['home', 'calc-reit-portfolio', 'calc-sip-swp'];
+const VALID_ROUTES: readonly RouteId[] = ['home', 'calc-reit-portfolio', 'calc-sip-swp', 'calc-epf-vpf', 'calc-nps'];
 
 function isRouteId(value: string): value is RouteId {
   return (VALID_ROUTES as readonly string[]).includes(value);

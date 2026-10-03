@@ -1,7 +1,9 @@
 import { CapitalGainsRules } from './capital-gains';
 import { CostInflationIndexRules } from './cost-inflation-index';
+import { EpfRules } from './epf-rules';
 import { FixedIncomeRules } from './fixed-income';
 import { IncomeTaxRules } from './income-tax';
+import { NpsRules } from './nps-rules';
 import { ReitDistributionRules } from './reit-distributions';
 import { ReitDistributionHistoryPack, ReitDistributionRecord, ReitInstrument, ReitInstrumentsPack } from './reit-reference';
 import { ReitPortfolioSnapshotPack, ReitPortfolioSnapshotRow } from './reit-portfolio-snapshot';
@@ -17,6 +19,8 @@ export * from './stamp-duty';
 export * from './reit-distributions';
 export * from './reit-reference';
 export * from './reit-portfolio-snapshot';
+export * from './epf-rules';
+export * from './nps-rules';
 
 /**
  * Registry of shipped rule packs. Empty in Phase 0 by design; income-tax and
@@ -31,6 +35,8 @@ import stampDuty from '../packs/stamp-duty.json';
 import fixedIncome from '../packs/fixed-income.json';
 import reitDistributionsFy2026_27 from '../packs/reit-distributions.fy-2026-27.json';
 import reitDistributionsFy2025_26 from '../packs/reit-distributions.fy-2025-26.json';
+import epfRules from '../packs/epf-rules.json';
+import npsRules from '../packs/nps-rules.json';
 
 const registry: readonly RulePackEnvelope[] = [
   RulePackEnvelope.parse(incomeTaxFy2026_27),
@@ -42,6 +48,8 @@ const registry: readonly RulePackEnvelope[] = [
   RulePackEnvelope.parse(fixedIncome),
   RulePackEnvelope.parse(reitDistributionsFy2026_27),
   RulePackEnvelope.parse(reitDistributionsFy2025_26),
+  RulePackEnvelope.parse(epfRules),
+  RulePackEnvelope.parse(npsRules),
 ];
 
 export function listRulePacks(): readonly RulePackEnvelope[] {
@@ -97,6 +105,20 @@ export function getFixedIncomeRules(): FixedIncomeRules {
   const pack = registry.find((p) => p.id === 'fixed-income');
   if (!pack) throw new RangeError('getFixedIncomeRules: fixed-income pack not registered');
   return FixedIncomeRules.parse(pack.rules);
+}
+
+/** Validates and returns the single epf-rules pack (EPS/EPF contribution split, wage ceiling, withdrawal TDS, EPS pension constants — see epf-rules.ts for why this is separate from the `fixed-income` pack's own epf/vpf entries). Throws if the pack is missing. */
+export function getEpfRules(): EpfRules {
+  const pack = registry.find((p) => p.id === 'epf-rules');
+  if (!pack) throw new RangeError('getEpfRules: epf-rules pack not registered');
+  return EpfRules.parse(pack.rules);
+}
+
+/** Validates and returns the single nps-rules pack (contribution/allocation limits, the Auto Choice lifecycle glide path, the Dec-2025-amended exit slabs, Section 80CCD limits). Throws if the pack is missing. */
+export function getNpsRules(): NpsRules {
+  const pack = registry.find((p) => p.id === 'nps-rules');
+  if (!pack) throw new RangeError('getNpsRules: nps-rules pack not registered');
+  return NpsRules.parse(pack.rules);
 }
 
 /**

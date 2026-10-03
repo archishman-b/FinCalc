@@ -9,6 +9,8 @@ export * from './tax';
 export * from './reit-portfolio-simulator';
 export * from './sip-swp-simulator';
 export * from './rental-yield-comparison';
+export * from './epf-vpf-simulator';
+export * from './nps-simulator';
 
 /** Bumped when the engine's numeric behaviour changes, so exported CSVs and shared URLs can say which engine produced them. */
 export const ENGINE_VERSION = '0.0.1';

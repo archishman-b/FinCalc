@@ -1,0 +1,75 @@
+{
+  "id": "epf-rules",
+  "fy": "2026-27",
+  "jurisdiction": "IN",
+  "effectiveFrom": "2026-09-17",
+  "provenance": {
+    "source": "https://upstox.com/news/personal-finance/latest-updates/epfo-wage-ceiling-hiked-to-25-000-labour-ministry-issues-gazette-notification/article-200466/",
+    "verifiedOn": "2026-10-03",
+    "note": "Covers EPF/EPS mechanics not already in the `fixed-income` pack (which carries the EPF/VPF interest rate itself — this pack does not duplicate it, see this file's own module doc comment in epf-rules.ts). The headline change this pack ships: the EPFO wage ceiling rose from ₹15,000/month to ₹25,000/month on 17 September 2026 (Gazette notification S.O. 5109(E), Labour Ministry) — the first revision since September 2014. This is the ceiling for mandatory EPFO coverage and for capping the EPS share of the employer's contribution; it is not a cap on total contributions, which many employers compute on uncapped actual wages by mutual agreement."
+  },
+  "citations": {
+    "contribution.wageCeilingInr": {
+      "source": "https://upstox.com/news/personal-finance/latest-updates/epfo-wage-ceiling-hiked-to-25-000-labour-ministry-issues-gazette-notification/article-200466/",
+      "verifiedOn": "2026-10-03",
+      "note": "₹25,000/month, effective 17 September 2026, per Gazette notification S.O. 5109(E) under Chapter III of the Code on Social Security, 2020. Was ₹15,000/month from September 2014 until this change."
+    },
+    "contribution.epsShareOfEmployerRate": {
+      "source": "https://razorpay.com/payroll/epfo-wage-ceiling-is-now-%E2%82%B925000-what-employers-need-to-know",
+      "verifiedOn": "2026-10-03",
+      "note": "8.33% of the employer's 12% contribution goes to EPS, applied only up to the wage ceiling — so the maximum employer EPS contribution rose from ₹1,250/month (at the ₹15,000 ceiling) to ₹2,083/month (at the new ₹25,000 ceiling). The 8.33% rate itself did not change; only the ceiling it's applied to did."
+    },
+    "withdrawal.taxFreeAfterYearsContinuousService": {
+      "source": "https://cleartax.in/s/pf-balance-withdrawal-incometax",
+      "verifiedOn": "2026-10-03",
+      "note": "Section 10(12): fully tax-exempt after 5 years of continuous service, with service at a previous employer counting toward the 5 years if the PF balance was transferred (via UAN) rather than withdrawn."
+    },
+    "withdrawal.tdsRateWithPan": {
+      "source": "https://cleartax.in/s/pf-balance-withdrawal-incometax",
+      "verifiedOn": "2026-10-03",
+      "note": "10% TDS with PAN furnished, 20% without, on withdrawals above ₹50,000 before 5 years' continuous service; Form 15G/15H can eliminate TDS if the subscriber has no net tax liability."
+    },
+    "eps.pensionDivisor": {
+      "source": "https://www.epfindia.gov.in/EP_Cal/pension.html",
+      "verifiedOn": "2026-10-03",
+      "note": "The EPS pension formula's divisor (pensionable salary × pensionable service ÷ 70) is widely cited but was not independently re-derived from a primary EPFO source this session — the EPFO EDLI/Pension calculator page that would confirm the current pensionable-salary ceiling returned a 403 to automated fetch. Flagged lower-confidence, same convention this project uses for Section 80D's section number; worth a direct manual check before this figure is relied on for anything beyond an illustrative estimate."
+    },
+    "eps.pensionableSalaryCeilingInr": {
+      "source": "https://www.epfindia.gov.in/EP_Cal/pension.html",
+      "verifiedOn": "2026-10-03",
+      "note": "Set equal to the current wage ceiling (₹25,000), matching EPS's long-standing convention of capping pensionable salary at the same figure as the EPF wage ceiling — not independently confirmed to have moved in lockstep with the 17 Sep 2026 wage-ceiling change specifically. Same lower-confidence flag as eps.pensionDivisor above."
+    },
+    "taxableInterest.thresholdWithEmployerContributionInr": {
+      "source": "https://tax2win.in/guide/how-to-calculate-taxable-interest-on-pf-contribution-in-new-budget",
+      "verifiedOn": "2026-10-03",
+      "note": "Budget 2021 (in force since FY2021-22): interest on the employee's own EPF+VPF contributions above ₹2,50,000/year is taxable at slab rate as \"income from other sources.\" This is the same ₹2.5L figure already carried by the `fixed-income` pack's `products.epf.taxableInterestThresholdPerYear` — duplicated here, independently cited, because this pack's consumer (the EPF/VPF module's own simulator) needs it alongside the EPS/wage-ceiling mechanics that pack doesn't carry."
+    },
+    "taxableInterest.thresholdWithoutEmployerContributionInr": {
+      "source": "https://tax2win.in/guide/how-to-calculate-taxable-interest-on-pf-contribution-in-new-budget",
+      "verifiedOn": "2026-10-03",
+      "note": "₹5,00,000/year threshold, applicable only to a provident fund account with no employer contribution at all (e.g. a government employee's GPF) — not reachable by this module's simulator, which always models an employer-matched EPF account, but kept here for completeness."
+    }
+  },
+  "rules": {
+    "contribution": {
+      "employeeRate": 0.12,
+      "employerRate": 0.12,
+      "epsShareOfEmployerRate": 0.0833,
+      "wageCeilingInr": 25000
+    },
+    "withdrawal": {
+      "taxFreeAfterYearsContinuousService": 5,
+      "tdsExemptBelowInr": 50000,
+      "tdsRateWithPan": 0.10,
+      "tdsRateWithoutPan": 0.20
+    },
+    "eps": {
+      "pensionDivisor": 70,
+      "pensionableSalaryCeilingInr": 25000
+    },
+    "taxableInterest": {
+      "thresholdWithEmployerContributionInr": 250000,
+      "thresholdWithoutEmployerContributionInr": 500000
+    }
+  }
+}

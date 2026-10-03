@@ -63,9 +63,9 @@ describe('@fincalc/data rule-pack envelope', () => {
 });
 
 describe('@fincalc/data shipped packs (Phase 2: income-tax and capital-gains)', () => {
-  it('ships nine packs — income-tax, capital-gains and reit-distributions for FY2026-27/FY2025-26, plus the cost-inflation-index, stamp-duty and fixed-income tables — and every one validates', () => {
+  it('ships eleven packs — income-tax, capital-gains and reit-distributions for FY2026-27/FY2025-26, plus the cost-inflation-index, stamp-duty, fixed-income, epf-rules and nps-rules tables — and every one validates', () => {
     const packs = listRulePacks();
-    expect(packs).toHaveLength(9);
+    expect(packs).toHaveLength(11);
     for (const pack of packs) expect(() => parseRulePack(pack)).not.toThrow();
   });
 

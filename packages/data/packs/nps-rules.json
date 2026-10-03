@@ -1,0 +1,123 @@
+{
+  "id": "nps-rules",
+  "fy": "2026-27",
+  "jurisdiction": "IN",
+  "effectiveFrom": "2025-12-16",
+  "provenance": {
+    "source": "https://www.hdfclife.com/retirement-and-pension-plans/new-nps-withdrawal-and-exit-rules",
+    "verifiedOn": "2026-10-03",
+    "note": "Tier I (the retirement account) only — Tier II (voluntary, no lock-in) is out of scope for this module, matching both official calculators researched (EPFO's and the NPS Trust's), which also model Tier I accumulation-to-exit only. The exit-withdrawal slabs ship as amended by the PFRDA (Exits and Withdrawals under the NPS) (Amendment) Regulations, 2025, in force 16 December 2025 — a large relaxation for non-government subscribers (up to 80% lump sum above ₹12L corpus, was 60%) confirmed from two independent secondary sources (gconnect.in, HDFC Life) rather than the PFRDA press release PDF itself, which refused automated fetch (robots.txt). A further 13 July 2026 PFRDA amendment was procedural (letting pension funds delegate certain scheme-operation functions) and did not touch these withdrawal percentages."
+  },
+  "citations": {
+    "activeChoice.maxEquityPctNonGovernment": {
+      "source": "https://www.wintwealth.com/blog/active-and-auto-choice-of-nps/",
+      "verifiedOn": "2026-10-03",
+      "note": "75% maximum equity allocation under Active Choice for non-government (\"all citizen\"/private-sector) subscribers up to age 50, tapering on an age-based matrix thereafter — this pack does not encode the post-50 taper for Active Choice (only Auto Choice's lifecycle glide path is modelled; a user choosing Active Choice past 50 should treat 75% as the pre-taper ceiling, not a guarantee at every age). Relaxed from an original 50% cap in stages around 2016-2018."
+    },
+    "activeChoice.maxEquityPctGovernment": {
+      "source": "https://www.business-standard.com/amp/article/economy-policy/pfrda-allows-up-to-75-in-equity-for-private-nps-116090801592_1.html",
+      "verifiedOn": "2026-10-03",
+      "note": "Government-sector subscribers have a more restricted Active Choice equity allocation than the 75% non-government figure, but the exact current cap was not pinned down to a primary PFRDA/NPS Trust source this session. Set to 50% (the figure both this module's research and general market commentary most consistently associate with government-sector NPS) as a lower-confidence placeholder — flagged for direct confirmation before being relied on, same convention as this project's Section 80D section-number flag."
+    },
+    "autoChoice.lifecycles": {
+      "source": "https://www.tatacapitalmoneyfy.com/blog/nps/active-vs-auto-choice-of-nps/",
+      "verifiedOn": "2026-10-03",
+      "note": "Equity-share checkpoints at ages 35/40/45/50/55+ for LC75 (aggressive, default start 75%), LC50 (moderate, the actual PFRDA default auto-choice fund, start 50%) and LC25 (conservative, start 25%) — a secondary source, not the primary PFRDA/NPS Trust scheme document, which moves in fixed per-year steps rather than only at these five checkpoints. This pack's `nps-simulator.ts` linearly interpolates between checkpoints, which approximates but does not exactly reproduce the real year-by-year PFRDA table. Needs refinement from a primary source before being relied on precisely; directionally correct glide shape is not in doubt."
+    },
+    "exit.vestingYearsNonGovernment": {
+      "source": "https://www.gconnect.in/nps-2/pfrda-nps-exit-rules-explained-press-release.html",
+      "verifiedOn": "2026-10-03",
+      "note": "Non-government normal exit is now available at 15 years of NPS tenure or age 60, whichever is earlier — relaxed by the December 2025 amendment from a flat age-60 requirement. Lock-in was also removed entirely for non-government subscribers' normal exit by the same amendment (not separately modelled as a field here — this pack's vesting rule is what actually gates the simulator's exit-age validation)."
+    },
+    "exit.nonGovernmentSlabs": {
+      "source": "https://www.hdfclife.com/retirement-and-pension-plans/new-nps-withdrawal-and-exit-rules",
+      "verifiedOn": "2026-10-03",
+      "note": "Corpus ≤₹8L: 100% lump sum, no annuity required. ₹8-12L: up to ₹6L lump sum (fixed rupee figure, not a percentage), remainder via annuity or Systematic Lumpsum Withdrawal. >₹12L: up to 80% lump sum, minimum 20% annuity — the large non-government relaxation from the prior 60:40 structure, per the PFRDA (Exits and Withdrawals under the NPS) (Amendment) Regulations, 2025, in force 16 December 2025. Cross-checked against gconnect.in's independent summary of the same PFRDA press release."
+    },
+    "exit.governmentSlabs": {
+      "source": "https://www.hdfclife.com/retirement-and-pension-plans/new-nps-withdrawal-and-exit-rules",
+      "verifiedOn": "2026-10-03",
+      "note": "Government-sector subscribers keep the pre-amendment 60% lump sum / 40% annuity structure above ₹12L corpus; the ≤₹8L (100% lump sum) and ₹8-12L (up to ₹6L + annuity/SLW) slabs below that were extended to government subscribers too by the same December 2025 amendment."
+    },
+    "exit.lumpSumTaxExemptFractionOfCorpus": {
+      "source": "https://taxguru.in/income-tax/decoding-exempt-incomes-income-tax-act-2025-section-10-to-11.html",
+      "verifiedOn": "2026-10-03",
+      "note": "Section 10(12A)'s tax exemption on the NPS lump-sum withdrawal appears to remain capped at 60% of the accumulated corpus even under the Income-tax Act 2025 (\"the exemption for withdrawal of up to 60% of the accumulated corpus remains intact\"), while PFRDA's own December 2025 exit-regulation amendment now permits up to 80% lump sum for non-government subscribers above ₹12L corpus. This is a likely, not yet resolved, conformity gap between the regulator's withdrawal ceiling and the tax exemption — directly analogous to this project's existing REIT/InvIT dividend-TDS-conformity note (claude/decisions-and-workflow.md). This pack ships the conservative 60% figure and the simulator flags any lump sum taken above it as potentially taxable, rather than assuming the exemption silently tracks the new 80% ceiling. Re-check immediately before this figure is relied on for anything beyond a flagged estimate — a CBDT circular could resolve this at any time."
+    },
+    "taxBenefits.selfContributionPctOfSalaryCapOldRegime": {
+      "source": "https://cleartax.in/s/section-80-ccd-1b",
+      "verifiedOn": "2026-10-03",
+      "note": "Section 80CCD(1): employee's own Tier I contribution, up to 10% of salary (Basic + DA), old regime only — sits inside the shared ₹1,50,000 Section 80C/80CCC/80CCD(1) ceiling, not on top of it."
+    },
+    "taxBenefits.additionalSelfContributionCapInr": {
+      "source": "https://cleartax.in/s/section-80-ccd-1b",
+      "verifiedOn": "2026-10-03",
+      "note": "Section 80CCD(1B): ₹50,000 additional deduction, old regime only, on top of the ₹1,50,000 80C/80CCD(1) ceiling (total ₹2,00,000). Budget 2025 speculation about extending this to the new regime did not materialise — confirmed still old-regime-only for FY2026-27 per a second source (smarttaxcalc.in, cross-checked)."
+    },
+    "taxBenefits.employerContribution": {
+      "source": "https://arthaengine.com/learn/tax/section-80ccd2-employer-nps-new-regime",
+      "verifiedOn": "2026-10-03",
+      "note": "Section 80CCD(2), the only NPS tax benefit that survives under the new regime. Non-government/private-sector: 10% of salary under the old regime, raised to 14% under the new regime (Budget 2024). Government: 14% of salary under both regimes, unchanged. Figures are against \"eligible salary\" (Basic + qualifying DA), not total CTC; employer contributions across EPF + NPS + superannuation combined are separately capped in aggregate at ₹7.5L/year (new-Act Section 17(1)(h), per Finance Bill 2026, effective 1 April 2026) before the excess is taxed as a perquisite — not modelled inside this pack, a household-level cross-module check noted in claude/pf-nps-research-and-plan.md."
+    }
+  },
+  "rules": {
+    "minContributionPerTransactionInr": 500,
+    "minAnnualContributionInr": 1000,
+    "entryAgeMin": 18,
+    "entryAgeMax": 70,
+    "activeChoice": {
+      "maxEquityPctNonGovernment": 75,
+      "maxEquityPctGovernment": 50,
+      "maxAlternativePct": 5
+    },
+    "autoChoice": {
+      "lifecycles": {
+        "LC75": [
+          { "age": 35, "equityPct": 75 },
+          { "age": 40, "equityPct": 55 },
+          { "age": 45, "equityPct": 35 },
+          { "age": 50, "equityPct": 20 },
+          { "age": 55, "equityPct": 15 }
+        ],
+        "LC50": [
+          { "age": 35, "equityPct": 50 },
+          { "age": 40, "equityPct": 40 },
+          { "age": 45, "equityPct": 30 },
+          { "age": 50, "equityPct": 20 },
+          { "age": 55, "equityPct": 10 }
+        ],
+        "LC25": [
+          { "age": 35, "equityPct": 25 },
+          { "age": 40, "equityPct": 20 },
+          { "age": 45, "equityPct": 15 },
+          { "age": 50, "equityPct": 10 },
+          { "age": 55, "equityPct": 5 }
+        ]
+      }
+    },
+    "exit": {
+      "vestingYearsNonGovernment": 15,
+      "vestingAgeGovernment": 60,
+      "nonGovernmentSlabs": [
+        { "upToInr": 800000, "maxLumpSumPct": 100, "maxLumpSumFixedInr": null, "minAnnuityPct": 0 },
+        { "upToInr": 1200000, "maxLumpSumPct": null, "maxLumpSumFixedInr": 600000, "minAnnuityPct": 0 },
+        { "upToInr": null, "maxLumpSumPct": 80, "maxLumpSumFixedInr": null, "minAnnuityPct": 20 }
+      ],
+      "governmentSlabs": [
+        { "upToInr": 800000, "maxLumpSumPct": 100, "maxLumpSumFixedInr": null, "minAnnuityPct": 0 },
+        { "upToInr": 1200000, "maxLumpSumPct": null, "maxLumpSumFixedInr": 600000, "minAnnuityPct": 0 },
+        { "upToInr": null, "maxLumpSumPct": 60, "maxLumpSumFixedInr": null, "minAnnuityPct": 40 }
+      ],
+      "lumpSumTaxExemptFractionOfCorpus": 0.60
+    },
+    "taxBenefits": {
+      "selfContributionPctOfSalaryCapOldRegime": 10,
+      "additionalSelfContributionCapInr": 50000,
+      "employerContribution": {
+        "nonGovernmentOldRegimePct": 10,
+        "nonGovernmentNewRegimePct": 14,
+        "governmentBothRegimesPct": 14
+      }
+    }
+  }
+}

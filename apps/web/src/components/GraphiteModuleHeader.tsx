@@ -29,20 +29,23 @@ const MOON = (
 const MODULE_TABS = [
   { id: 'reit', label: 'REIT income', route: 'calc-reit-portfolio' },
   { id: 'sip-swp', label: 'SIP & SWP', route: 'calc-sip-swp' },
+  { id: 'epf-vpf', label: 'EPF & VPF', route: 'calc-epf-vpf' },
+  { id: 'nps', label: 'NPS (Tier I)', route: 'calc-nps' },
 ] as const;
 
 export type GraphiteModuleId = (typeof MODULE_TABS)[number]['id'];
 
 /**
- * Shared topbar for the Graphite-themed modules (REIT income, SIP & SWP) —
- * ported from both prototypes' `.topbar`/`.bar`/`.ticker` (see
- * lib/graphite-theme.ts's module doc comment for why this is a separate
- * design system from the rest of FinCalc, not a new global nav). Each
- * module renders this once, at the top of its own `.graphite` wrapper, and
- * supplies its own `ticker` content via the `TickerLabel`/`TickerItem`
- * helpers below — REIT prices and yields on the REIT route, holdings and
- * net returns on SIP & SWP. The ticker is a per-module slot, not shared
- * state between the two routes.
+ * Shared topbar for the Graphite-themed modules (REIT income, SIP & SWP,
+ * EPF & VPF, NPS) — ported from the first two prototypes' `.topbar`/`.bar`/
+ * `.ticker` (see lib/graphite-theme.ts's module doc comment for why this is
+ * a separate design system from the rest of FinCalc, not a new global
+ * nav). Each module renders this once, at the top of its own `.graphite`
+ * wrapper, and supplies its own `ticker` content via the `TickerLabel`/
+ * `TickerItem` helpers below — REIT prices and yields on the REIT route,
+ * holdings and net returns on SIP & SWP, EPF/EPS rules in effect on EPF &
+ * VPF, NPS Tier I rules in effect on NPS. The ticker is a per-module slot,
+ * not shared state between routes.
  *
  * The prototypes link between modules with `<a href>` to each other's
  * artifact URL, since they were separate static pages; here the two

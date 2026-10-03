@@ -3,12 +3,13 @@ import { type ComponentType } from 'react';
 import { navigate, type RouteId } from '../lib/router';
 
 /**
- * Small landing page for a two-module app — REIT income and SIP & SWP are
- * the whole surface now (see claude/decisions-and-workflow.md for the
- * removal of the flagship Comparator, the Tier 1 grid, and everything else
- * the app used to ship). Each card just links into its module; the
- * module itself (via GraphiteModuleHeader) is where cross-navigation
- * between the two lives once you're inside one.
+ * Small landing page for a four-module app — REIT income, SIP & SWP, EPF &
+ * VPF and NPS (Tier I) are the whole surface now (see
+ * claude/decisions-and-workflow.md for the removal of the flagship
+ * Comparator, the Tier 1 grid, and everything else the app used to ship,
+ * and for the EPF & VPF / NPS build, Phase 15). Each card just links into
+ * its module; the module itself (via GraphiteModuleHeader) is where
+ * cross-navigation between modules lives once you're inside one.
  */
 
 interface IconProps {
@@ -35,6 +36,24 @@ function IconSipSwp({ size = 22 }: IconProps) {
   );
 }
 
+function IconEpfVpf({ size = 22 }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3.5 4 7v5.5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7z" />
+      <path d="M9 12l2.3 2.3L15.5 10" />
+    </svg>
+  );
+}
+
+function IconNps({ size = 22 }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8.25" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
+
 interface Module {
   number: string;
   name: string;
@@ -57,6 +76,20 @@ const MODULES: Module[] = [
     detail: 'Build a corpus, then draw it down — withdrawal modes, de-risking glide, bear/base/bull scenarios',
     route: 'calc-sip-swp',
     icon: IconSipSwp,
+  },
+  {
+    number: '03',
+    name: 'EPF & VPF',
+    detail: 'Project your retirement corpus and EPS pension — the EPS/EPF employer split, VPF top-up, taxable-interest threshold',
+    route: 'calc-epf-vpf',
+    icon: IconEpfVpf,
+  },
+  {
+    number: '04',
+    name: 'NPS (Tier I)',
+    detail: 'Auto or Active Choice to exit — corpus growth, lump-sum vs. annuity split, estimated pension',
+    route: 'calc-nps',
+    icon: IconNps,
   },
 ];
 
