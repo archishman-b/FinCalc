@@ -48,6 +48,10 @@ export type GraphiteModuleId = (typeof MODULE_TABS)[number]['id'];
  * artifact URL, since they were separate static pages; here the two
  * modules are routes in the same SPA, so this links with the router's own
  * `navigate()` instead and highlights the active tab via `aria-current`.
+ *
+ * The FinCalc wordmark (accent square + "FinCalc") doubles as the way back
+ * to the landing page — `navigate('home')` — since the two-module app has
+ * no other persistent home/back affordance once you're inside a module.
  */
 export function GraphiteModuleHeader({
   active,
@@ -66,10 +70,16 @@ export function GraphiteModuleHeader({
     <div className="sticky top-0 z-20" style={{ background: 'var(--head)', borderBottom: '1px solid var(--rule)' }}>
       <div className="flex h-[52px] items-center justify-between gap-4 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="h-5 w-5 flex-shrink-0 rounded-[5px]" style={{ background: 'var(--accent)' }} aria-hidden="true" />
-          <b className="text-[14.5px] font-semibold tracking-tight" style={{ color: 'var(--ink)' }}>
-            FinCalc
-          </b>
+          <button
+            type="button"
+            onClick={() => navigate('home')}
+            aria-label="FinCalc home"
+            className="flex flex-shrink-0 items-center gap-2 rounded-sm"
+            style={{ color: 'var(--ink)' }}
+          >
+            <span className="h-5 w-5 flex-shrink-0 rounded-[5px]" style={{ background: 'var(--accent)' }} aria-hidden="true" />
+            <b className="text-[14.5px] font-semibold tracking-tight">FinCalc</b>
+          </button>
           <span className="truncate text-[13px]" style={{ color: 'var(--muted)' }}>
             / {moduleLabel}
           </span>
