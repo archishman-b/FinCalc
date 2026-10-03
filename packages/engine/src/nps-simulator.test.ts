@@ -249,6 +249,25 @@ describe('simulateNps — nominal vs. real (Phase 16)', () => {
     expect(result.exit.annuityPurchaseRealInr).toBeCloseTo(result.exit.annuityPurchaseInr / d, 6);
     expect(result.exit.estimatedMonthlyPensionRealInr).toBeCloseTo(result.exit.estimatedMonthlyPensionInr / d, 6);
   });
+
+  it('keeps real contributions from exceeding the real corpus over a long horizon (regression, same bug class as EPF/VPF)', () => {
+    // Same regression shape as epf-vpf-simulator.test.ts's accounting-
+    // identity guard: before the fix, summing each year's own-deflator
+    // increment for contributedToDateRealInr/total...RealInr could put
+    // real contributions ahead of a horizon-deflated real corpus even
+    // though real growth must be non-negative at a positive real return.
+    const result = simulateNps(
+      baseInput({
+        currentAge: 36,
+        retirementAge: 60,
+        inflationPct: 6,
+        openingCorpusInr: 0,
+        returnAssumptions: { equityPct: 12, corporateDebtPct: 8, governmentSecuritiesPct: 7, alternativePct: 8 },
+      }),
+    );
+    const totalRealContributed = result.totalEmployeeContributedRealInr + result.totalEmployerContributedRealInr;
+    expect(totalRealContributed).toBeLessThan(result.corpusAtExitRealInr);
+  });
 });
 
 describe('simulateNps — edge cases', () => {

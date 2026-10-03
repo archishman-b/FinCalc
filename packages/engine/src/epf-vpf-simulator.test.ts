@@ -123,6 +123,22 @@ describe('simulateEpfVpf — nominal vs. real (Phase 16)', () => {
     expect(deflatorYear1).toBeCloseTo(1.08, 6);
     expect(deflatorYear3).toBeCloseTo(Math.pow(1.08, 3), 6);
   });
+
+  it('keeps the real-terms accounting identity intact over a long horizon (regression for "interest earned exceeds corpus")', () => {
+    // A long horizon with real-world-ish interest and inflation rates is
+    // exactly the shape that exposed the original bug: summing each year's
+    // own-deflator increment for a cumulative total overstated it relative
+    // to a horizon-deflated corpus, so totalInterestEarnedRealInr could
+    // exceed corpusAtRetirementRealInr. Guard both the identity and the
+    // specific symptom directly.
+    const result = simulateEpfVpf(
+      baseInput({ currentAge: 36, retirementAge: 60, epfInterestRatePct: 8.25, salaryGrowthPctPerYear: 8, inflationPct: 6 }),
+    );
+    const sumOfRealParts =
+      result.totalEmployeeContributedRealInr + result.totalEmployerEpfContributedRealInr + result.totalInterestEarnedRealInr;
+    expect(sumOfRealParts).toBeCloseTo(result.corpusAtRetirementRealInr, 2);
+    expect(result.totalInterestEarnedRealInr).toBeLessThan(result.corpusAtRetirementRealInr);
+  });
 });
 
 describe('simulateEpfVpf — edge cases', () => {

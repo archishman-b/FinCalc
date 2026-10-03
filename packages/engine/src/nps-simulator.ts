@@ -48,11 +48,20 @@
  * out" approach the official NPS Trust calculator itself uses, rather than
  * modeling a specific insurer's annuity product.
  *
- * **Nominal vs. real (Phase 16).** Same convention and same per-simulation-
- * year deflator granularity as `epf-vpf-simulator.ts`'s own "Nominal vs.
- * real" note — see that module's doc comment for the full reasoning. Every
- * `...Inr` figure here is nominal; a parallel `...RealInr` figure is that
- * amount in today's money.
+ * **Nominal vs. real (Phase 16, revised).** Same convention and same
+ * per-simulation-year deflator granularity as `epf-vpf-simulator.ts`'s own
+ * "Nominal vs. real" note — see that module's doc comment for the full
+ * reasoning, including the post-ship fix it describes: per-year FLOW
+ * figures (`employeeContributionThisYearRealInr`,
+ * `employerContributionThisYearRealInr`) use that year's own deflator, but
+ * `contributedToDateRealInr` and the result-level
+ * `total...RealInr`/`corpusAtExitRealInr`/`exit.*RealInr` fields deflate
+ * the cumulative NOMINAL total by one single deflator (this row's own, or
+ * `horizonDeflator` for the final result) rather than summing per-year-
+ * deflated increments — otherwise `totalEmployeeContributedRealInr` +
+ * `totalEmployerContributedRealInr` could overstate relative to
+ * `corpusAtExitRealInr`, the same paradox found and fixed in the EPF/VPF
+ * module.
  */
 
 export type NpsAllocationMode = 'active' | 'auto';
@@ -236,9 +245,6 @@ export function simulateNps(input: NpsSimulatorInput): NpsSimulationResult {
   let corpus = input.openingCorpusInr;
   let totalEmployeeContributed = 0;
   let totalEmployerContributed = 0;
-  let totalEmployeeContributedReal = 0;
-  let totalEmployerContributedReal = 0;
-
   let employeeContributionThisYear = 0;
   let employerContributionThisYear = 0;
 
@@ -277,25 +283,24 @@ export function simulateNps(input: NpsSimulatorInput): NpsSimulationResult {
     const isYearBoundary = (m + 1) % 12 === 0;
     if (isYearBoundary) {
       // Deflator resolved once per completed simulation year — see this
-      // module's doc comment ("Nominal vs. real").
+      // module's doc comment ("Nominal vs. real"). Per-year FLOW figures
+      // use this year's own deflator; contributedToDateRealInr deflates
+      // the cumulative NOMINAL total by this same row's single deflator
+      // instead of summing per-year-deflated increments.
       const yearDeflator = Math.pow(1 + inflationRate, yearIndex + 1);
-      const employeeContributionThisYearReal = employeeContributionThisYear / yearDeflator;
-      const employerContributionThisYearReal = employerContributionThisYear / yearDeflator;
-      totalEmployeeContributedReal += employeeContributionThisYearReal;
-      totalEmployerContributedReal += employerContributionThisYearReal;
 
       yearly.push({
         year: yearIndex + 1,
         age: ageThisMonth + 1,
         employeeContributionThisYearInr: employeeContributionThisYear,
-        employeeContributionThisYearRealInr: employeeContributionThisYearReal,
+        employeeContributionThisYearRealInr: employeeContributionThisYear / yearDeflator,
         employerContributionThisYearInr: employerContributionThisYear,
-        employerContributionThisYearRealInr: employerContributionThisYearReal,
+        employerContributionThisYearRealInr: employerContributionThisYear / yearDeflator,
         equitySharePct: equityPct,
         corpusAtYearEndInr: corpus,
         corpusAtYearEndRealInr: corpus / yearDeflator,
         contributedToDateInr: totalEmployeeContributed + totalEmployerContributed,
-        contributedToDateRealInr: totalEmployeeContributedReal + totalEmployerContributedReal,
+        contributedToDateRealInr: (totalEmployeeContributed + totalEmployerContributed) / yearDeflator,
       });
       employeeContributionThisYear = 0;
       employerContributionThisYear = 0;
@@ -333,9 +338,9 @@ export function simulateNps(input: NpsSimulatorInput): NpsSimulationResult {
     corpusAtExitInr: corpusAtExit,
     corpusAtExitRealInr: corpusAtExit / horizonDeflator,
     totalEmployeeContributedInr: totalEmployeeContributed,
-    totalEmployeeContributedRealInr: totalEmployeeContributedReal,
+    totalEmployeeContributedRealInr: totalEmployeeContributed / horizonDeflator,
     totalEmployerContributedInr: totalEmployerContributed,
-    totalEmployerContributedRealInr: totalEmployerContributedReal,
+    totalEmployerContributedRealInr: totalEmployerContributed / horizonDeflator,
     inflationDeflatorAtHorizon: horizonDeflator,
     exit: {
       corpusAtExitInr: corpusAtExit,
