@@ -5,7 +5,7 @@ import { formatINR } from '@fincalc/ui';
 import { getEpfRules, getFixedIncomeRules } from '@fincalc/data';
 import { simulateEpfVpf, type EpfVpfSimulationResult, type EpfVpfSimulatorInput } from '@fincalc/engine';
 
-import { Card, FieldRow, SliderField, Stepper } from '../../components/GraphiteFields';
+import { Card, FieldRow, Segmented, SliderField, Stepper } from '../../components/GraphiteFields';
 import { GraphiteModuleHeader, TickerItem, TickerLabel } from '../../components/GraphiteModuleHeader';
 import { GRAPHITE_CSS_VARS, graphiteChartColors, useGraphiteTheme, type GraphiteTheme } from '../../lib/graphite-theme';
 import { useSharedTaxSettings } from '../../lib/shared-tax-settings';
@@ -32,12 +32,12 @@ import { useSharedTaxSettings } from '../../lib/shared-tax-settings';
  * `EpfVpfSimulatorInput`, with no separate mapping step, since there's no
  * holdings-array-style restructuring needed) and renders the result.
  *
- * Unlike REIT income and SIP & SWP, this module does not produce
- * inflation-adjusted ("today's rupees") figures from the engine itself —
- * `simulateEpfVpf()` is a single nominal-rupee projection. The one
- * exception is the hero sentence's "in today's money" aside, computed
- * locally from the shared inflation assumption for context, not threaded
- * through every chart and table the way the other two modules do.
+ * Like REIT income and SIP & SWP, this module shows every figure in both
+ * nominal (future) and real (today's money) terms via a `showFutureRupees`
+ * toggle (Phase 16) — `simulateEpfVpf()` now takes the shared inflation
+ * assumption as an input and produces a parallel `...RealInr` figure
+ * alongside every nominal one (see that module's own "Nominal vs. real"
+ * doc comment for the deflation convention).
  */
 
 function rupee(v: number): string {
@@ -50,7 +50,10 @@ function pct(v: number, decimals = 2): string {
   return `${v.toFixed(decimals)}%`;
 }
 
-function defaultFormState(): EpfVpfSimulatorInput {
+/** Everything `EpfVpfSimulatorInput` needs except `inflationPct`, which comes from the shared tax/inflation store instead of this module's own form state — see `EpfVpfPlanner()`. */
+type EpfFormState = Omit<EpfVpfSimulatorInput, 'inflationPct'>;
+
+function defaultFormState(): EpfFormState {
   const epf = getEpfRules();
   const fixedIncome = getFixedIncomeRules();
   return {
@@ -74,9 +77,13 @@ function defaultFormState(): EpfVpfSimulatorInput {
 
 /* ---------- charts ---------- */
 
-function CorpusChart({ result, theme }: { result: EpfVpfSimulationResult; theme: GraphiteTheme }) {
+function CorpusChart({ result, showFutureRupees, theme }: { result: EpfVpfSimulationResult; showFutureRupees: boolean; theme: GraphiteTheme }) {
   const colors = graphiteChartColors(theme);
-  const data = result.yearly.map((y) => ({ year: y.year, corpus: y.closingBalanceInr, contributed: y.contributedToDateInr }));
+  const data = result.yearly.map((y) => ({
+    year: y.year,
+    corpus: showFutureRupees ? y.closingBalanceInr : y.closingBalanceRealInr,
+    contributed: showFutureRupees ? y.contributedToDateInr : y.contributedToDateRealInr,
+  }));
   return (
     <div className="h-72 w-full" role="img" aria-label="EPF/VPF corpus and money contributed to date, by year">
       <ResponsiveContainer width="100%" height="100%">
@@ -98,13 +105,13 @@ function CorpusChart({ result, theme }: { result: EpfVpfSimulationResult; theme:
   );
 }
 
-function ContributionMixChart({ result, theme }: { result: EpfVpfSimulationResult; theme: GraphiteTheme }) {
+function ContributionMixChart({ result, showFutureRupees, theme }: { result: EpfVpfSimulationResult; showFutureRupees: boolean; theme: GraphiteTheme }) {
   const colors = graphiteChartColors(theme);
   const data = result.yearly.map((y) => ({
     year: y.year,
-    employee: y.employeeContributionThisYearInr,
-    employerEpf: y.employerEpfContributionThisYearInr,
-    employerEps: y.employerEpsContributionThisYearInr,
+    employee: showFutureRupees ? y.employeeContributionThisYearInr : y.employeeContributionThisYearRealInr,
+    employerEpf: showFutureRupees ? y.employerEpfContributionThisYearInr : y.employerEpfContributionThisYearRealInr,
+    employerEps: showFutureRupees ? y.employerEpsContributionThisYearInr : y.employerEpsContributionThisYearRealInr,
   }));
   const labels: Record<string, string> = { employee: 'Employee (incl. VPF)', employerEpf: 'Employer → EPF', employerEps: 'Employer → EPS' };
   return (
@@ -130,14 +137,20 @@ function ContributionMixChart({ result, theme }: { result: EpfVpfSimulationResul
 export function EpfVpfPlanner() {
   const { theme, toggle: toggleTheme } = useGraphiteTheme();
   const taxSettings = useSharedTaxSettings();
-  const [form, setForm] = useState<EpfVpfSimulatorInput>(() => defaultFormState());
+  const [form, setForm] = useState<EpfFormState>(() => defaultFormState());
+  const [showFutureRupees, setShowFutureRupees] = useState(false);
 
-  const result = useMemo(() => simulateEpfVpf(form), [form]);
+  const simulatorInput = useMemo<EpfVpfSimulatorInput>(
+    () => ({ ...form, inflationPct: taxSettings.settings.inflationPct }),
+    [form, taxSettings.settings.inflationPct],
+  );
+  const result = useMemo(() => simulateEpfVpf(simulatorInput), [simulatorInput]);
+  const unit = showFutureRupees ? 'future ₹' : "today's ₹";
 
-  const estimatedTaxOnTaxableInterestInr = result.totalTaxableInterestInr * (taxSettings.settings.slabRatePct / 100);
-  const corpusInTodaysRupees = result.corpusAtRetirementInr / Math.pow(1 + taxSettings.settings.inflationPct / 100, result.yearsSimulated);
+  const estimatedTaxOnTaxableInterestInr =
+    (showFutureRupees ? result.totalTaxableInterestInr : result.totalTaxableInterestRealInr) * (taxSettings.settings.slabRatePct / 100);
 
-  function update(patch: Partial<EpfVpfSimulatorInput>) {
+  function update(patch: Partial<EpfFormState>) {
     setForm((f) => ({ ...f, ...patch }));
   }
   function resetToDefaults() {
@@ -159,14 +172,26 @@ export function EpfVpfPlanner() {
       <GraphiteModuleHeader active="epf-vpf" moduleLabel="EPF & VPF" theme={theme} onToggleTheme={toggleTheme} ticker={tickerContent} />
 
       <div className="mx-auto max-w-[1400px] p-4 sm:p-6">
-        <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)' }}>
-          {result.yearsSimulated}-year plan to retirement · future ₹
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)' }}>
+            {result.yearsSimulated}-year plan to retirement
+          </span>
+          <div className="flex items-center gap-2 text-[11.5px]" style={{ color: 'var(--muted)' }}>
+            <span>Figures shown in</span>
+            <Segmented options={[{ value: 'today', label: "Today's ₹" }, { value: 'future', label: 'Future ₹' }]} value={showFutureRupees ? 'future' : 'today'} onChange={(v) => setShowFutureRupees(v === 'future')} />
+          </div>
         </div>
         <p className="mb-5 max-w-[70ch] text-lg leading-snug" style={{ color: 'var(--ink)' }}>
           Contributing {rupee(form.monthlyBasicPlusDaInr * ((form.employeeContributionRatePct + form.vpfContributionRatePct) / 100))} a month today, growing with
-          your salary, your EPF + VPF corpus reaches <strong style={{ color: 'var(--acctext)' }}>{rupeeCompact(result.corpusAtRetirementInr)}</strong> at
-          retirement (worth {rupeeCompact(corpusInTodaysRupees)} in today's money). Your employer's EPS contributions separately build towards an
-          estimated pension of <strong style={{ color: 'var(--acctext)' }}>{rupee(result.epsMonthlyPensionEstimateInr)}/month</strong>.
+          your salary, your EPF + VPF corpus reaches{' '}
+          <strong style={{ color: 'var(--acctext)' }}>
+            {rupeeCompact(showFutureRupees ? result.corpusAtRetirementInr : result.corpusAtRetirementRealInr)}
+          </strong>{' '}
+          at retirement, {unit}. Your employer's EPS contributions separately build towards an estimated pension of{' '}
+          <strong style={{ color: 'var(--acctext)' }}>
+            {rupee(showFutureRupees ? result.epsMonthlyPensionEstimateInr : result.epsMonthlyPensionEstimateRealInr)}/month
+          </strong>
+          .
         </p>
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
@@ -180,6 +205,16 @@ export function EpfVpfPlanner() {
             </h2>
             <SliderField label="Current age" value={form.currentAge} onChange={(v) => update({ currentAge: Math.round(v) })} min={18} max={65} step={1} />
             <SliderField label="Retirement age" value={form.retirementAge} onChange={(v) => update({ retirementAge: Math.round(v) })} min={19} max={70} step={1} />
+
+            <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
+              Existing balance
+            </h2>
+            <FieldRow label="Opening EPF + VPF balance (₹)">
+              <Stepper value={form.openingBalanceInr} onChange={(v) => update({ openingBalanceInr: v })} step={50_000} min={0} />
+            </FieldRow>
+            <FieldRow label="Pensionable service so far (yrs)">
+              <Stepper value={form.openingPensionableServiceYears} onChange={(v) => update({ openingPensionableServiceYears: v })} step={1} min={0} max={45} />
+            </FieldRow>
 
             <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
               Salary
@@ -223,16 +258,6 @@ export function EpfVpfPlanner() {
             </FieldRow>
 
             <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
-              Existing balance
-            </h2>
-            <FieldRow label="Opening EPF + VPF balance (₹)">
-              <Stepper value={form.openingBalanceInr} onChange={(v) => update({ openingBalanceInr: v })} step={50_000} min={0} />
-            </FieldRow>
-            <FieldRow label="Pensionable service so far (yrs)">
-              <Stepper value={form.openingPensionableServiceYears} onChange={(v) => update({ openingPensionableServiceYears: v })} step={1} min={0} max={45} />
-            </FieldRow>
-
-            <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
               Tax <span className="font-normal normal-case" style={{ color: 'var(--muted)' }}>· shared with REIT income &amp; SIP &amp; SWP</span>
             </h2>
             <FieldRow label="Your slab rate" hint="applied to the taxable-interest slice below">
@@ -254,25 +279,33 @@ export function EpfVpfPlanner() {
                 <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
                   Corpus at retirement
                 </div>
-                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">{rupeeCompact(result.corpusAtRetirementInr)}</div>
-                <div className="text-[11px]" style={{ color: 'var(--muted)' }}>{rupeeCompact(corpusInTodaysRupees)} in today's money</div>
+                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">
+                  {rupeeCompact(showFutureRupees ? result.corpusAtRetirementInr : result.corpusAtRetirementRealInr)}
+                </div>
+                <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
+                  {rupeeCompact(showFutureRupees ? result.corpusAtRetirementRealInr : result.corpusAtRetirementInr)} in {showFutureRupees ? "today's" : 'future'} money
+                </div>
               </Card>
               <Card>
                 <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
                   Total interest earned
                 </div>
-                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">{rupeeCompact(result.totalInterestEarnedInr)}</div>
+                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">
+                  {rupeeCompact(showFutureRupees ? result.totalInterestEarnedInr : result.totalInterestEarnedRealInr)}
+                </div>
                 <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
-                  of which {rupeeCompact(result.totalTaxableInterestInr)} taxable (~{rupeeCompact(estimatedTaxOnTaxableInterestInr)} tax at your slab rate)
+                  of which {rupeeCompact(showFutureRupees ? result.totalTaxableInterestInr : result.totalTaxableInterestRealInr)} taxable (~{rupeeCompact(estimatedTaxOnTaxableInterestInr)} tax at your slab rate)
                 </div>
               </Card>
               <Card>
                 <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
                   Estimated EPS pension
                 </div>
-                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">{rupee(result.epsMonthlyPensionEstimateInr)}/mo</div>
+                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">
+                  {rupee(showFutureRupees ? result.epsMonthlyPensionEstimateInr : result.epsMonthlyPensionEstimateRealInr)}/mo
+                </div>
                 <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
-                  {result.pensionableServiceYears} yrs service × {rupeeCompact(result.epsPensionableSalaryInr)} salary ÷ {form.epsPensionDivisor}
+                  {result.pensionableServiceYears} yrs service × {rupeeCompact(showFutureRupees ? result.epsPensionableSalaryInr : result.epsPensionableSalaryRealInr)} salary ÷ {form.epsPensionDivisor}
                 </div>
               </Card>
             </div>
@@ -282,7 +315,7 @@ export function EpfVpfPlanner() {
               <p className="mb-3 text-xs" style={{ color: 'var(--muted)' }}>
                 EPF + VPF balance vs. money contributed to date (employee + employer's EPF share — EPS contributions are tracked separately and never compound into this balance).
               </p>
-              <CorpusChart result={result} theme={theme} />
+              <CorpusChart result={result} showFutureRupees={showFutureRupees} theme={theme} />
             </Card>
 
             <Card>
@@ -290,7 +323,7 @@ export function EpfVpfPlanner() {
               <p className="mb-3 text-xs" style={{ color: 'var(--muted)' }}>
                 Each year's employee (+ VPF) contribution, employer's EPF share, and employer's EPS share — the EPS share grows only up to the wage ceiling.
               </p>
-              <ContributionMixChart result={result} theme={theme} />
+              <ContributionMixChart result={result} showFutureRupees={showFutureRupees} theme={theme} />
             </Card>
 
             <Card>
@@ -311,13 +344,13 @@ export function EpfVpfPlanner() {
                       <tr key={y.year}>
                         <td className="border-b p-2" style={{ borderColor: 'var(--rule)' }}>{y.year}</td>
                         <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{y.age}</td>
-                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(y.monthlyBasicPlusDaInr)}</td>
-                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(y.employeeContributionThisYearInr)}</td>
-                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(y.employerEpfContributionThisYearInr)}</td>
-                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(y.employerEpsContributionThisYearInr)}</td>
-                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(y.interestCreditedThisYearInr)}</td>
-                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(y.taxableInterestThisYearInr)}</td>
-                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(y.closingBalanceInr)}</td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(showFutureRupees ? y.monthlyBasicPlusDaInr : y.monthlyBasicPlusDaRealInr)}</td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(showFutureRupees ? y.employeeContributionThisYearInr : y.employeeContributionThisYearRealInr)}</td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(showFutureRupees ? y.employerEpfContributionThisYearInr : y.employerEpfContributionThisYearRealInr)}</td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(showFutureRupees ? y.employerEpsContributionThisYearInr : y.employerEpsContributionThisYearRealInr)}</td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(showFutureRupees ? y.interestCreditedThisYearInr : y.interestCreditedThisYearRealInr)}</td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(showFutureRupees ? y.taxableInterestThisYearInr : y.taxableInterestThisYearRealInr)}</td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(showFutureRupees ? y.closingBalanceInr : y.closingBalanceRealInr)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -329,8 +362,9 @@ export function EpfVpfPlanner() {
               <h2 className="mb-2 text-[15px] font-semibold">Assumptions &amp; data</h2>
               <ul className="list-disc space-y-1.5 pl-5 text-xs" style={{ color: 'var(--ink2)' }}>
                 <li>
-                  Figures are nominal (future) rupees, not inflation-adjusted, except the one "today's money" figure above the corpus total — this module doesn't
-                  track a full real/nominal series the way REIT income and SIP &amp; SWP do.
+                  Every figure can be shown in future (nominal) or today's (real) rupees via the toggle above — today's-money figures deflate by this year's own
+                  elapsed-inflation factor, resolved once per simulation year rather than per month (see <code>epf-vpf-simulator.ts</code>'s own doc comment) —
+                  a coarser grid than REIT income and SIP &amp; SWP's per-month deflation, acceptable at this module's annual reporting granularity.
                 </li>
                 <li>EPFO credits interest once a year on a monthly running balance; this simulator compounds monthly throughout instead — a standard approximation, immaterial at these rates over realistic horizons.</li>
                 <li>

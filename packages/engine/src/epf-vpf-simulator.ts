@@ -49,6 +49,20 @@
  * once-a-year-credited figure, immaterial at these rates over realistic
  * horizons.
  *
+ * **Nominal vs. real (Phase 16).** Every rupee figure this simulator
+ * produces is nominal (future) by default; a parallel `...RealInr` figure
+ * expresses the same amount in today's money, using `inflationPct` and a
+ * deflator resolved once per *simulation year* (not per month) — each
+ * year's aggregated nominal flow is divided by that year's own deflator
+ * before being added to a running real total, rather than deflating a
+ * cumulative nominal total by a single horizon-end factor (which would be
+ * wrong for a cumulative sum spanning years with different deflators). This
+ * is a coarser time grid than `sip-swp-simulator.ts`'s per-month deflation
+ * (today's-money figures here can be off by up to half a year of inflation
+ * within any given simulation year) — acceptable at this module's annual
+ * reporting granularity, not worth the added complexity of a monthly real
+ * ledger alongside the monthly nominal one.
+ *
  * The EPS monthly-pension estimate uses the textbook formula (pensionable
  * salary × pensionable service ÷ pension divisor) with pensionable salary
  * taken as the average of the last 5 years' monthly wage, capped at the
@@ -85,6 +99,8 @@ export interface EpfVpfSimulatorInput {
   taxableInterestThresholdPerYearInr: number;
   epsPensionDivisor: number;
   epsPensionableSalaryCeilingInr: number;
+  /** Assumed annual inflation rate (%) used to express every nominal figure in today's money too — see this module's doc comment ("Nominal vs. real"). */
+  inflationPct: number;
 }
 
 export interface EpfVpfYearRow {
@@ -92,32 +108,50 @@ export interface EpfVpfYearRow {
   age: number;
   /** Monthly Basic + DA during this simulation year (after salary growth), for reference. */
   monthlyBasicPlusDaInr: number;
+  monthlyBasicPlusDaRealInr: number;
   employeeContributionThisYearInr: number;
+  employeeContributionThisYearRealInr: number;
   employerEpfContributionThisYearInr: number;
+  employerEpfContributionThisYearRealInr: number;
   /** Diverted to EPS this year — does not compound into this account's balance, tracked for visibility and the EPS pension estimate only. */
   employerEpsContributionThisYearInr: number;
+  employerEpsContributionThisYearRealInr: number;
   interestCreditedThisYearInr: number;
+  interestCreditedThisYearRealInr: number;
   /** The share of this year's interest attributable to the employee's own excess (above-threshold) contribution — taxable at slab rate as "income from other sources," reported for the user's own return, not auto-deducted here. */
   taxableInterestThisYearInr: number;
+  taxableInterestThisYearRealInr: number;
   closingBalanceInr: number;
+  closingBalanceRealInr: number;
   /** Cumulative employee + employer-EPF contributions from simulation start through this year (excludes EPS, which never compounds into this balance) — exposed so callers can chart "corpus vs. money put in" without re-deriving a running total themselves. */
   contributedToDateInr: number;
+  contributedToDateRealInr: number;
 }
 
 export interface EpfVpfSimulationResult {
   yearly: readonly EpfVpfYearRow[];
   yearsSimulated: number;
   corpusAtRetirementInr: number;
+  corpusAtRetirementRealInr: number;
   totalEmployeeContributedInr: number;
+  totalEmployeeContributedRealInr: number;
   totalEmployerEpfContributedInr: number;
+  totalEmployerEpfContributedRealInr: number;
   totalEmployerEpsContributedInr: number;
+  totalEmployerEpsContributedRealInr: number;
   totalInterestEarnedInr: number;
+  totalInterestEarnedRealInr: number;
   totalTaxableInterestInr: number;
+  totalTaxableInterestRealInr: number;
   pensionableServiceYears: number;
   /** Average of the last up-to-5 years' monthly wage, capped at the EPS pensionable-salary ceiling. */
   epsPensionableSalaryInr: number;
+  epsPensionableSalaryRealInr: number;
   /** pensionableSalary × pensionableServiceYears ÷ pensionDivisor — an approximate estimate, see this module's doc comment. */
   epsMonthlyPensionEstimateInr: number;
+  epsMonthlyPensionEstimateRealInr: number;
+  /** (1 + inflationPct/100)^yearsSimulated — divide any nominal horizon-end figure by this to get today's rupees. */
+  inflationDeflatorAtHorizon: number;
 }
 
 function clampInt(value: number, min: number, max: number): number {
@@ -134,6 +168,7 @@ export function simulateEpfVpf(input: EpfVpfSimulatorInput): EpfVpfSimulationRes
   const epsRate = Math.max(0, input.epsShareOfEmployerRatePct) / 100;
   const wageCeiling = Math.max(0, input.wageCeilingInr);
   const threshold = Math.max(0, input.taxableInterestThresholdPerYearInr);
+  const inflationRate = input.inflationPct / 100;
 
   let nonTaxableBalance = Math.max(0, input.openingBalanceInr);
   let taxableBalance = 0;
@@ -151,6 +186,12 @@ export function simulateEpfVpf(input: EpfVpfSimulatorInput): EpfVpfSimulationRes
   let totalEmployerEps = 0;
   let totalInterest = 0;
   let totalTaxableInterest = 0;
+
+  let totalEmployeeContributedReal = 0;
+  let totalEmployerEpfReal = 0;
+  let totalEmployerEpsReal = 0;
+  let totalInterestReal = 0;
+  let totalTaxableInterestReal = 0;
 
   const yearly: EpfVpfYearRow[] = [];
 
@@ -191,17 +232,41 @@ export function simulateEpfVpf(input: EpfVpfSimulatorInput): EpfVpfSimulationRes
     totalTaxableInterest += interestTaxable;
 
     if ((t + 1) % 12 === 0) {
+      // Deflator resolved once per completed simulation year (see this
+      // module's doc comment) — this year's own aggregated nominal flows
+      // are divided by it before joining the running real totals.
+      const yearDeflator = Math.pow(1 + inflationRate, yearIndex + 1);
+      const employeeContribReal = yearEmployeeContrib / yearDeflator;
+      const employerEpfReal = yearEmployerEpf / yearDeflator;
+      const employerEpsReal = yearEmployerEps / yearDeflator;
+      const interestReal = yearInterest / yearDeflator;
+      const taxableInterestReal = yearTaxableInterest / yearDeflator;
+
+      totalEmployeeContributedReal += employeeContribReal;
+      totalEmployerEpfReal += employerEpfReal;
+      totalEmployerEpsReal += employerEpsReal;
+      totalInterestReal += interestReal;
+      totalTaxableInterestReal += taxableInterestReal;
+
       yearly.push({
         year: yearIndex + 1,
         age: input.currentAge + yearIndex + 1,
         monthlyBasicPlusDaInr: wageThisYear,
+        monthlyBasicPlusDaRealInr: wageThisYear / yearDeflator,
         employeeContributionThisYearInr: yearEmployeeContrib,
+        employeeContributionThisYearRealInr: employeeContribReal,
         employerEpfContributionThisYearInr: yearEmployerEpf,
+        employerEpfContributionThisYearRealInr: employerEpfReal,
         employerEpsContributionThisYearInr: yearEmployerEps,
+        employerEpsContributionThisYearRealInr: employerEpsReal,
         interestCreditedThisYearInr: yearInterest,
+        interestCreditedThisYearRealInr: interestReal,
         taxableInterestThisYearInr: yearTaxableInterest,
+        taxableInterestThisYearRealInr: taxableInterestReal,
         closingBalanceInr: nonTaxableBalance + taxableBalance,
+        closingBalanceRealInr: (nonTaxableBalance + taxableBalance) / yearDeflator,
         contributedToDateInr: totalEmployeeContributed + totalEmployerEpf,
+        contributedToDateRealInr: totalEmployeeContributedReal + totalEmployerEpfReal,
       });
       yearEmployeeContrib = 0;
       yearEmployerEpf = 0;
@@ -212,6 +277,7 @@ export function simulateEpfVpf(input: EpfVpfSimulatorInput): EpfVpfSimulationRes
   }
 
   const corpusAtRetirement = nonTaxableBalance + taxableBalance;
+  const horizonDeflator = Math.pow(1 + inflationRate, years);
   const last5 = yearly.slice(-5);
   const avgLast5Wage = last5.length > 0 ? last5.reduce((a, r) => a + r.monthlyBasicPlusDaInr, 0) / last5.length : 0;
   const epsPensionableSalary = Math.min(avgLast5Wage, Math.max(0, input.epsPensionableSalaryCeilingInr));
@@ -222,13 +288,22 @@ export function simulateEpfVpf(input: EpfVpfSimulatorInput): EpfVpfSimulationRes
     yearly,
     yearsSimulated: years,
     corpusAtRetirementInr: corpusAtRetirement,
+    corpusAtRetirementRealInr: corpusAtRetirement / horizonDeflator,
     totalEmployeeContributedInr: totalEmployeeContributed,
+    totalEmployeeContributedRealInr: totalEmployeeContributedReal,
     totalEmployerEpfContributedInr: totalEmployerEpf,
+    totalEmployerEpfContributedRealInr: totalEmployerEpfReal,
     totalEmployerEpsContributedInr: totalEmployerEps,
+    totalEmployerEpsContributedRealInr: totalEmployerEpsReal,
     totalInterestEarnedInr: totalInterest,
+    totalInterestEarnedRealInr: totalInterestReal,
     totalTaxableInterestInr: totalTaxableInterest,
+    totalTaxableInterestRealInr: totalTaxableInterestReal,
     pensionableServiceYears,
     epsPensionableSalaryInr: epsPensionableSalary,
+    epsPensionableSalaryRealInr: epsPensionableSalary / horizonDeflator,
     epsMonthlyPensionEstimateInr: epsMonthlyPension,
+    epsMonthlyPensionEstimateRealInr: epsMonthlyPension / horizonDeflator,
+    inflationDeflatorAtHorizon: horizonDeflator,
   };
 }

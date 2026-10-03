@@ -3,11 +3,14 @@ import { useState } from 'react';
 import { getCapitalGainsRules } from '@fincalc/data';
 
 /**
- * Capital-gains and inflation assumptions shared between the two Graphite
- * modules (REIT income, SIP & SWP) — pulled out of `ReitPortfolioBuilder.tsx`'s
- * own local tax fields once a second module needed the identical rates,
- * rather than letting a household's slab rate, equity gains rate or
- * inflation assumption drift between the two tools silently. Persisted to
+ * Capital-gains and inflation assumptions shared across the Graphite
+ * modules — pulled out of `ReitPortfolioBuilder.tsx`'s own local tax fields
+ * once a second module (SIP & SWP) needed the identical rates, rather than
+ * letting a household's slab rate, equity gains rate or inflation
+ * assumption drift between the tools silently. EPF & VPF and NPS (Phase
+ * 15/16) are lighter consumers — EPF & VPF uses only `slabRatePct` and
+ * `inflationPct`; NPS uses only `inflationPct` — neither module's own
+ * mechanics touch capital-gains rates. Persisted to
  * localStorage (the same per-viewer-conveniences pattern as
  * `lib/graphite-theme.ts`'s theme choice) so a rate the user tunes on one
  * module — their actual slab rate, say — is already filled in in the other,

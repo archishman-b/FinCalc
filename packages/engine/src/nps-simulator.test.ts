@@ -48,6 +48,7 @@ function baseInput(overrides: Partial<NpsSimulatorInput> = {}): NpsSimulatorInpu
     lumpSumWithdrawalPct: 60,
     exitSlabs: NON_GOVERNMENT_SLABS,
     lumpSumTaxExemptFractionOfCorpus: 0.6,
+    inflationPct: 0,
     ...overrides,
   };
 }
@@ -215,6 +216,38 @@ describe('simulateNps — exit: lump sum, exemption cap, and annuity', () => {
       }),
     );
     expect(result.exit.lumpSumTakenInr).toBeCloseTo(30_000, 6); // 25% of 120,000, not the slab's 100% max
+  });
+});
+
+describe('simulateNps — nominal vs. real (Phase 16)', () => {
+  it('matches nominal exactly when inflation is zero', () => {
+    const result = simulateNps(baseInput({ inflationPct: 0 }));
+    expect(result.corpusAtExitRealInr).toBeCloseTo(result.corpusAtExitInr, 6);
+    expect(result.exit.lumpSumTakenRealInr).toBeCloseTo(result.exit.lumpSumTakenInr, 6);
+  });
+
+  it('deflates a one-year horizon by exactly the annual inflation rate', () => {
+    const result = simulateNps(baseInput({ inflationPct: 10 }));
+    expect(result.inflationDeflatorAtHorizon).toBeCloseTo(1.1, 10);
+    expect(result.corpusAtExitRealInr).toBeCloseTo(result.corpusAtExitInr / 1.1, 6);
+    expect(result.yearly[0]!.contributedToDateRealInr).toBeCloseTo(result.yearly[0]!.contributedToDateInr / 1.1, 6);
+  });
+
+  it('deflates the exit breakdown (lump sum, exempt, taxable, annuity, pension) consistently by the horizon deflator', () => {
+    const result = simulateNps(
+      baseInput({
+        currentAge: 30,
+        retirementAge: 31,
+        openingCorpusInr: 2_000_000,
+        lumpSumWithdrawalPct: 100,
+        inflationPct: 5,
+      }),
+    );
+    const d = result.inflationDeflatorAtHorizon;
+    expect(result.exit.lumpSumExemptRealInr).toBeCloseTo(result.exit.lumpSumExemptInr / d, 6);
+    expect(result.exit.lumpSumPotentiallyTaxableRealInr).toBeCloseTo(result.exit.lumpSumPotentiallyTaxableInr / d, 6);
+    expect(result.exit.annuityPurchaseRealInr).toBeCloseTo(result.exit.annuityPurchaseInr / d, 6);
+    expect(result.exit.estimatedMonthlyPensionRealInr).toBeCloseTo(result.exit.estimatedMonthlyPensionInr / d, 6);
   });
 });
 

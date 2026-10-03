@@ -26,6 +26,7 @@ function baseInput(overrides: Partial<EpfVpfSimulatorInput> = {}): EpfVpfSimulat
     taxableInterestThresholdPerYearInr: 250_000,
     epsPensionDivisor: 70,
     epsPensionableSalaryCeilingInr: 25_000,
+    inflationPct: 0,
     ...overrides,
   };
 }
@@ -96,6 +97,31 @@ describe('simulateEpfVpf — interest compounds monthly on the opening balance',
     // 100,000 * (1 + 0.12/12*...)^12 == 100,000 * 1.12, since the monthly factor is (1.12)^(1/12)
     expect(result.corpusAtRetirementInr).toBeCloseTo(112_000, 2);
     expect(result.totalInterestEarnedInr).toBeCloseTo(12_000, 2);
+  });
+});
+
+describe('simulateEpfVpf — nominal vs. real (Phase 16)', () => {
+  it('matches nominal exactly when inflation is zero', () => {
+    const result = simulateEpfVpf(baseInput({ epfInterestRatePct: 12, inflationPct: 0 }));
+    expect(result.corpusAtRetirementRealInr).toBeCloseTo(result.corpusAtRetirementInr, 6);
+    expect(result.yearly[0]!.closingBalanceRealInr).toBeCloseTo(result.yearly[0]!.closingBalanceInr, 6);
+  });
+
+  it('deflates a one-year horizon by exactly the annual inflation rate', () => {
+    // One full simulation year at 10% inflation -> yearDeflator = 1.10 exactly.
+    const result = simulateEpfVpf(baseInput({ inflationPct: 10 }));
+    expect(result.inflationDeflatorAtHorizon).toBeCloseTo(1.1, 10);
+    expect(result.corpusAtRetirementRealInr).toBeCloseTo(result.corpusAtRetirementInr / 1.1, 6);
+    expect(result.yearly[0]!.contributedToDateRealInr).toBeCloseTo(result.yearly[0]!.contributedToDateInr / 1.1, 6);
+  });
+
+  it('deflates each later year by a larger factor than an earlier year', () => {
+    const result = simulateEpfVpf(baseInput({ currentAge: 30, retirementAge: 33, inflationPct: 8 }));
+    const deflatorYear1 = result.yearly[0]!.closingBalanceInr / result.yearly[0]!.closingBalanceRealInr;
+    const deflatorYear3 = result.yearly[2]!.closingBalanceInr / result.yearly[2]!.closingBalanceRealInr;
+    expect(deflatorYear3).toBeGreaterThan(deflatorYear1);
+    expect(deflatorYear1).toBeCloseTo(1.08, 6);
+    expect(deflatorYear3).toBeCloseTo(Math.pow(1.08, 3), 6);
   });
 });
 

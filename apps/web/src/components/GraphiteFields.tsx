@@ -49,11 +49,11 @@ export function Stepper({
         min={min}
         max={max}
         onChange={(e) => onChange(clamp(parseFloat(e.target.value) || 0))}
-        className="num h-8 w-full rounded border pr-6 text-right text-[12.5px] font-medium"
+        className={`num h-8 w-full rounded border text-right text-[12.5px] font-medium ${suffix ? 'pr-9' : 'pr-6'}`}
         style={{ background: 'var(--field)', borderColor: 'var(--rule)', color: 'var(--ink)' }}
       />
       {suffix && (
-        <span className="pointer-events-none absolute right-7 top-1/2 -translate-y-1/2 text-[11px]" style={{ color: 'var(--muted)' }}>
+        <span className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 text-[11px]" style={{ color: 'var(--muted)' }}>
           {suffix}
         </span>
       )}

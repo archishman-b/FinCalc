@@ -47,6 +47,12 @@
  * annuity rate ÷ 12) — the same "expected annuity rate in, monthly pension
  * out" approach the official NPS Trust calculator itself uses, rather than
  * modeling a specific insurer's annuity product.
+ *
+ * **Nominal vs. real (Phase 16).** Same convention and same per-simulation-
+ * year deflator granularity as `epf-vpf-simulator.ts`'s own "Nominal vs.
+ * real" note — see that module's doc comment for the full reasoning. Every
+ * `...Inr` figure here is nominal; a parallel `...RealInr` figure is that
+ * amount in today's money.
  */
 
 export type NpsAllocationMode = 'active' | 'auto';
@@ -112,36 +118,53 @@ export interface NpsSimulatorInput {
   exitSlabs: readonly NpsExitSlabInput[];
   /** Fraction of the final corpus the lump sum's tax exemption is capped at. */
   lumpSumTaxExemptFractionOfCorpus: number;
+  /** Assumed annual inflation rate (%) used to express every nominal figure in today's money too — see this module's doc comment ("Nominal vs. real"). */
+  inflationPct: number;
 }
 
 export interface NpsYearRow {
   year: number;
   age: number;
   employeeContributionThisYearInr: number;
+  employeeContributionThisYearRealInr: number;
   employerContributionThisYearInr: number;
+  employerContributionThisYearRealInr: number;
   /** Equity share (%) in effect during this year (constant for Active Choice, glide-interpolated for Auto Choice). */
   equitySharePct: number;
   corpusAtYearEndInr: number;
+  corpusAtYearEndRealInr: number;
   /** Cumulative employee + employer contributions from simulation start through this year — exposed so callers can chart "corpus vs. money put in" without re-deriving a running total themselves. */
   contributedToDateInr: number;
+  contributedToDateRealInr: number;
 }
 
 export interface NpsExitBreakdown {
   corpusAtExitInr: number;
+  corpusAtExitRealInr: number;
   maxLumpSumAllowedPct: number;
   lumpSumTakenInr: number;
+  lumpSumTakenRealInr: number;
   lumpSumExemptInr: number;
+  lumpSumExemptRealInr: number;
   lumpSumPotentiallyTaxableInr: number;
+  lumpSumPotentiallyTaxableRealInr: number;
   annuityPurchaseInr: number;
+  annuityPurchaseRealInr: number;
   estimatedMonthlyPensionInr: number;
+  estimatedMonthlyPensionRealInr: number;
 }
 
 export interface NpsSimulationResult {
   yearly: readonly NpsYearRow[];
   yearsSimulated: number;
   corpusAtExitInr: number;
+  corpusAtExitRealInr: number;
   totalEmployeeContributedInr: number;
+  totalEmployeeContributedRealInr: number;
   totalEmployerContributedInr: number;
+  totalEmployerContributedRealInr: number;
+  /** (1 + inflationPct/100)^yearsSimulated — divide any nominal horizon-end figure by this to get today's rupees. */
+  inflationDeflatorAtHorizon: number;
   exit: NpsExitBreakdown;
 }
 
@@ -207,10 +230,14 @@ export function simulateNps(input: NpsSimulatorInput): NpsSimulationResult {
   const autoBlendedDebtReturn =
     (input.returnAssumptions.corporateDebtPct + input.returnAssumptions.governmentSecuritiesPct + input.returnAssumptions.alternativePct) / 3;
 
+  const inflationRate = input.inflationPct / 100;
+
   const yearly: NpsYearRow[] = [];
   let corpus = input.openingCorpusInr;
   let totalEmployeeContributed = 0;
   let totalEmployerContributed = 0;
+  let totalEmployeeContributedReal = 0;
+  let totalEmployerContributedReal = 0;
 
   let employeeContributionThisYear = 0;
   let employerContributionThisYear = 0;
@@ -249,14 +276,26 @@ export function simulateNps(input: NpsSimulatorInput): NpsSimulationResult {
 
     const isYearBoundary = (m + 1) % 12 === 0;
     if (isYearBoundary) {
+      // Deflator resolved once per completed simulation year — see this
+      // module's doc comment ("Nominal vs. real").
+      const yearDeflator = Math.pow(1 + inflationRate, yearIndex + 1);
+      const employeeContributionThisYearReal = employeeContributionThisYear / yearDeflator;
+      const employerContributionThisYearReal = employerContributionThisYear / yearDeflator;
+      totalEmployeeContributedReal += employeeContributionThisYearReal;
+      totalEmployerContributedReal += employerContributionThisYearReal;
+
       yearly.push({
         year: yearIndex + 1,
         age: ageThisMonth + 1,
         employeeContributionThisYearInr: employeeContributionThisYear,
+        employeeContributionThisYearRealInr: employeeContributionThisYearReal,
         employerContributionThisYearInr: employerContributionThisYear,
+        employerContributionThisYearRealInr: employerContributionThisYearReal,
         equitySharePct: equityPct,
         corpusAtYearEndInr: corpus,
+        corpusAtYearEndRealInr: corpus / yearDeflator,
         contributedToDateInr: totalEmployeeContributed + totalEmployerContributed,
+        contributedToDateRealInr: totalEmployeeContributedReal + totalEmployerContributedReal,
       });
       employeeContributionThisYear = 0;
       employerContributionThisYear = 0;
@@ -286,21 +325,32 @@ export function simulateNps(input: NpsSimulatorInput): NpsSimulationResult {
   const lumpSumPotentiallyTaxable = Math.max(0, lumpSumTaken - lumpSumExempt);
   const annuityPurchase = corpusAtExit - lumpSumTaken;
   const estimatedMonthlyPension = (annuityPurchase * (input.annuityRatePct / 100)) / 12;
+  const horizonDeflator = Math.pow(1 + inflationRate, years);
 
   return {
     yearly,
     yearsSimulated: years,
     corpusAtExitInr: corpusAtExit,
+    corpusAtExitRealInr: corpusAtExit / horizonDeflator,
     totalEmployeeContributedInr: totalEmployeeContributed,
+    totalEmployeeContributedRealInr: totalEmployeeContributedReal,
     totalEmployerContributedInr: totalEmployerContributed,
+    totalEmployerContributedRealInr: totalEmployerContributedReal,
+    inflationDeflatorAtHorizon: horizonDeflator,
     exit: {
       corpusAtExitInr: corpusAtExit,
+      corpusAtExitRealInr: corpusAtExit / horizonDeflator,
       maxLumpSumAllowedPct,
       lumpSumTakenInr: lumpSumTaken,
+      lumpSumTakenRealInr: lumpSumTaken / horizonDeflator,
       lumpSumExemptInr: lumpSumExempt,
+      lumpSumExemptRealInr: lumpSumExempt / horizonDeflator,
       lumpSumPotentiallyTaxableInr: lumpSumPotentiallyTaxable,
+      lumpSumPotentiallyTaxableRealInr: lumpSumPotentiallyTaxable / horizonDeflator,
       annuityPurchaseInr: annuityPurchase,
+      annuityPurchaseRealInr: annuityPurchase / horizonDeflator,
       estimatedMonthlyPensionInr: estimatedMonthlyPension,
+      estimatedMonthlyPensionRealInr: estimatedMonthlyPension / horizonDeflator,
     },
   };
 }

@@ -17,6 +17,7 @@ import {
 import { Card, FieldRow, Segmented, SliderField, Stepper } from '../../components/GraphiteFields';
 import { GraphiteModuleHeader, TickerItem, TickerLabel } from '../../components/GraphiteModuleHeader';
 import { GRAPHITE_CSS_VARS, graphiteChartColors, useGraphiteTheme, type GraphiteTheme } from '../../lib/graphite-theme';
+import { useSharedTaxSettings } from '../../lib/shared-tax-settings';
 
 /**
  * National Pension System (NPS, Tier I only) planner — the fourth Graphite
@@ -28,12 +29,15 @@ import { GRAPHITE_CSS_VARS, graphiteChartColors, useGraphiteTheme, type Graphite
  * from that outline: Tier I only — no Tier II, no partial withdrawals.
  *
  * Same architecture as the other three Graphite modules: the shared
- * `.graphite` theme and topbar, the same five form primitives. Unlike EPF/
- * VPF, this module does NOT use `useSharedTaxSettings()` — NPS's lump-sum
- * exemption and annuity taxation aren't slab-rate or capital-gains driven
- * in a way that hook's fields model, so the tax-benefit figures shown here
- * (80CCD) are sourced directly from the `nps-rules` pack and presented as
- * reference information, not wired into a computed deduction.
+ * `.graphite` theme and topbar, the same five form primitives. This module
+ * uses `useSharedTaxSettings()` for exactly one field — the shared
+ * inflation assumption, behind the "Today's ₹ / Future ₹" toggle (Phase
+ * 16) — none of that hook's other fields (slab rate, capital-gains rates)
+ * apply here, since NPS's lump-sum exemption and annuity taxation aren't
+ * slab-rate or capital-gains driven in a way those fields model; the
+ * tax-benefit figures shown here (80CCD) are sourced directly from the
+ * `nps-rules` pack and presented as reference information, not wired into
+ * a computed deduction.
  *
  * `@fincalc/engine`'s `simulateNps()` takes every pack-sourced figure (the
  * lifecycle glide table, the sector's exit slabs, the lump-sum exemption
@@ -135,7 +139,7 @@ function defaultFormState(): FormState {
   };
 }
 
-function toSimulatorInput(form: FormState, rules: NpsRules): NpsSimulatorInput {
+function toSimulatorInput(form: FormState, rules: NpsRules, inflationPct: number): NpsSimulatorInput {
   const exitSlabs = form.sector === 'government' ? rules.exit.governmentSlabs : rules.exit.nonGovernmentSlabs;
   return {
     currentAge: form.currentAge,
@@ -156,14 +160,19 @@ function toSimulatorInput(form: FormState, rules: NpsRules): NpsSimulatorInput {
     lumpSumWithdrawalPct: form.lumpSumWithdrawalPct,
     exitSlabs,
     lumpSumTaxExemptFractionOfCorpus: rules.exit.lumpSumTaxExemptFractionOfCorpus,
+    inflationPct,
   };
 }
 
 /* ---------- charts ---------- */
 
-function CorpusChart({ result, theme }: { result: NpsSimulationResult; theme: GraphiteTheme }) {
+function CorpusChart({ result, showFutureRupees, theme }: { result: NpsSimulationResult; showFutureRupees: boolean; theme: GraphiteTheme }) {
   const colors = graphiteChartColors(theme);
-  const data = result.yearly.map((y) => ({ year: y.year, corpus: y.corpusAtYearEndInr, contributed: y.contributedToDateInr }));
+  const data = result.yearly.map((y) => ({
+    year: y.year,
+    corpus: showFutureRupees ? y.corpusAtYearEndInr : y.corpusAtYearEndRealInr,
+    contributed: showFutureRupees ? y.contributedToDateInr : y.contributedToDateRealInr,
+  }));
   return (
     <div className="h-72 w-full" role="img" aria-label="NPS Tier I corpus and money contributed to date, by year">
       <ResponsiveContainer width="100%" height="100%">
@@ -186,6 +195,7 @@ function CorpusChart({ result, theme }: { result: NpsSimulationResult; theme: Gr
 }
 
 function EquityGlideChart({ result, theme }: { result: NpsSimulationResult; theme: GraphiteTheme }) {
+  // Equity share is a ratio, not a rupee figure — nothing to deflate, so this chart takes no showFutureRupees prop.
   const colors = graphiteChartColors(theme);
   const data = result.yearly.map((y) => ({ year: y.year, equity: y.equitySharePct }));
   return (
@@ -207,15 +217,21 @@ function EquityGlideChart({ result, theme }: { result: NpsSimulationResult; them
 
 export function NpsPlanner() {
   const { theme, toggle: toggleTheme } = useGraphiteTheme();
+  const taxSettings = useSharedTaxSettings();
   const npsRules = useMemo(() => getNpsRules(), []);
   const [form, setForm] = useState<FormState>(() => defaultFormState());
+  const [showFutureRupees, setShowFutureRupees] = useState(false);
 
   const maxEquityPct = form.sector === 'government' ? npsRules.activeChoice.maxEquityPctGovernment : npsRules.activeChoice.maxEquityPctNonGovernment;
   const exitSlabs = form.sector === 'government' ? npsRules.exit.governmentSlabs : npsRules.exit.nonGovernmentSlabs;
   const glideTable = npsRules.autoChoice.lifecycles[form.lifecycleFund] ?? [];
 
-  const simulatorInput = useMemo(() => toSimulatorInput(form, npsRules), [form, npsRules]);
+  const simulatorInput = useMemo(
+    () => toSimulatorInput(form, npsRules, taxSettings.settings.inflationPct),
+    [form, npsRules, taxSettings.settings.inflationPct],
+  );
   const result = useMemo(() => simulateNps(simulatorInput), [simulatorInput]);
+  const unit = showFutureRupees ? 'future ₹' : "today's ₹";
 
   function update(patch: Partial<FormState>) {
     setForm((f) => ({ ...f, ...patch }));
@@ -256,15 +272,27 @@ export function NpsPlanner() {
       <GraphiteModuleHeader active="nps" moduleLabel="NPS (Tier I)" theme={theme} onToggleTheme={toggleTheme} ticker={tickerContent} />
 
       <div className="mx-auto max-w-[1400px] p-4 sm:p-6">
-        <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)' }}>
-          {result.yearsSimulated}-year plan to exit · future ₹
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)' }}>
+            {result.yearsSimulated}-year plan to exit
+          </span>
+          <div className="flex items-center gap-2 text-[11.5px]" style={{ color: 'var(--muted)' }}>
+            <span>Figures shown in</span>
+            <Segmented options={[{ value: 'today', label: "Today's ₹" }, { value: 'future', label: 'Future ₹' }]} value={showFutureRupees ? 'future' : 'today'} onChange={(v) => setShowFutureRupees(v === 'future')} />
+          </div>
         </div>
         <p className="mb-5 max-w-[70ch] text-lg leading-snug" style={{ color: 'var(--ink)' }}>
-          Your NPS Tier I corpus reaches <strong style={{ color: 'var(--acctext)' }}>{rupeeCompact(result.corpusAtExitInr)}</strong> at exit. Taking a{' '}
+          Your NPS Tier I corpus reaches{' '}
+          <strong style={{ color: 'var(--acctext)' }}>{rupeeCompact(showFutureRupees ? result.corpusAtExitInr : result.corpusAtExitRealInr)}</strong> at exit,{' '}
+          {unit}. Taking a{' '}
           {pct(result.exit.maxLumpSumAllowedPct >= form.lumpSumWithdrawalPct ? form.lumpSumWithdrawalPct : result.exit.maxLumpSumAllowedPct, 0)} lump sum (
-          {rupeeCompact(result.exit.lumpSumTakenInr)}, of which {rupeeCompact(result.exit.lumpSumExemptInr)} is tax-exempt), the remaining{' '}
-          {rupeeCompact(result.exit.annuityPurchaseInr)} buys an annuity estimated to pay{' '}
-          <strong style={{ color: 'var(--acctext)' }}>{rupee(result.exit.estimatedMonthlyPensionInr)}/month</strong>.
+          {rupeeCompact(showFutureRupees ? result.exit.lumpSumTakenInr : result.exit.lumpSumTakenRealInr)}, of which{' '}
+          {rupeeCompact(showFutureRupees ? result.exit.lumpSumExemptInr : result.exit.lumpSumExemptRealInr)} is tax-exempt), the remaining{' '}
+          {rupeeCompact(showFutureRupees ? result.exit.annuityPurchaseInr : result.exit.annuityPurchaseRealInr)} buys an annuity estimated to pay{' '}
+          <strong style={{ color: 'var(--acctext)' }}>
+            {rupee(showFutureRupees ? result.exit.estimatedMonthlyPensionInr : result.exit.estimatedMonthlyPensionRealInr)}/month
+          </strong>
+          .
         </p>
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
@@ -291,6 +319,13 @@ export function NpsPlanner() {
                 Sets the Active Choice equity cap ({pct(maxEquityPct, 0)}) and the exit-withdrawal slabs below.
               </p>
             </div>
+
+            <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
+              Existing corpus
+            </h2>
+            <FieldRow label="Opening Tier I corpus (₹)">
+              <Stepper value={form.openingCorpusInr} onChange={(v) => update({ openingCorpusInr: v })} step={50_000} min={0} />
+            </FieldRow>
 
             <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
               Contributions
@@ -365,13 +400,6 @@ export function NpsPlanner() {
             <SliderField label="Alternative (A)" value={form.returnAssumptions.alternativePct} onChange={(v) => update({ returnAssumptions: { ...form.returnAssumptions, alternativePct: v } })} min={0} max={20} step={0.5} suffix="%" />
 
             <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
-              Existing corpus
-            </h2>
-            <FieldRow label="Opening Tier I corpus (₹)">
-              <Stepper value={form.openingCorpusInr} onChange={(v) => update({ openingCorpusInr: v })} step={50_000} min={0} />
-            </FieldRow>
-
-            <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
               At exit
             </h2>
             <SliderField label="Lump sum requested" hint="clamped to the slab's max, shown below" value={form.lumpSumWithdrawalPct} onChange={(v) => update({ lumpSumWithdrawalPct: v })} min={0} max={100} step={5} suffix="%" />
@@ -383,6 +411,13 @@ export function NpsPlanner() {
               Tax benefits <span className="font-normal normal-case" style={{ color: 'var(--muted)' }}>· reference only</span>
             </h2>
             <Segmented options={[{ value: 'old', label: 'Old regime' }, { value: 'new', label: 'New regime' }]} value={form.taxRegime} onChange={(v) => update({ taxRegime: v })} />
+
+            <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
+              Inflation <span className="font-normal normal-case" style={{ color: 'var(--muted)' }}>· shared with REIT income, SIP &amp; SWP, and EPF &amp; VPF</span>
+            </h2>
+            <FieldRow label="Inflation" hint="% a year, for the today's-₹ figures above">
+              <Stepper value={taxSettings.settings.inflationPct} onChange={(v) => taxSettings.updateSettings({ inflationPct: v })} step={0.5} min={0} max={12} suffix="%" />
+            </FieldRow>
 
             <button type="button" onClick={resetToDefaults} className="mt-3 h-8 w-full rounded border text-xs font-medium" style={{ borderColor: 'var(--rule)', color: 'var(--ink)' }}>
               Reset to defaults
@@ -396,26 +431,36 @@ export function NpsPlanner() {
                 <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
                   Corpus at exit
                 </div>
-                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">{rupeeCompact(result.corpusAtExitInr)}</div>
+                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">
+                  {rupeeCompact(showFutureRupees ? result.corpusAtExitInr : result.corpusAtExitRealInr)}
+                </div>
                 <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
-                  {rupeeCompact(result.totalEmployeeContributedInr)} you + {rupeeCompact(result.totalEmployerContributedInr)} employer
+                  {rupeeCompact(showFutureRupees ? result.totalEmployeeContributedInr : result.totalEmployeeContributedRealInr)} you +{' '}
+                  {rupeeCompact(showFutureRupees ? result.totalEmployerContributedInr : result.totalEmployerContributedRealInr)} employer
                 </div>
               </Card>
               <Card>
                 <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
                   Lump sum at exit
                 </div>
-                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">{rupeeCompact(result.exit.lumpSumTakenInr)}</div>
+                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">
+                  {rupeeCompact(showFutureRupees ? result.exit.lumpSumTakenInr : result.exit.lumpSumTakenRealInr)}
+                </div>
                 <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
-                  {rupeeCompact(result.exit.lumpSumExemptInr)} exempt, {rupeeCompact(result.exit.lumpSumPotentiallyTaxableInr)} potentially taxable
+                  {rupeeCompact(showFutureRupees ? result.exit.lumpSumExemptInr : result.exit.lumpSumExemptRealInr)} exempt,{' '}
+                  {rupeeCompact(showFutureRupees ? result.exit.lumpSumPotentiallyTaxableInr : result.exit.lumpSumPotentiallyTaxableRealInr)} potentially taxable
                 </div>
               </Card>
               <Card>
                 <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
                   Estimated pension
                 </div>
-                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">{rupee(result.exit.estimatedMonthlyPensionInr)}/mo</div>
-                <div className="text-[11px]" style={{ color: 'var(--muted)' }}>from a {rupeeCompact(result.exit.annuityPurchaseInr)} annuity purchase at {pct(form.annuityRatePct)}</div>
+                <div className="num mb-0.5 text-[28px] font-medium leading-none tracking-tight">
+                  {rupee(showFutureRupees ? result.exit.estimatedMonthlyPensionInr : result.exit.estimatedMonthlyPensionRealInr)}/mo
+                </div>
+                <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
+                  from a {rupeeCompact(showFutureRupees ? result.exit.annuityPurchaseInr : result.exit.annuityPurchaseRealInr)} annuity purchase at {pct(form.annuityRatePct)}
+                </div>
               </Card>
             </div>
 
@@ -424,7 +469,7 @@ export function NpsPlanner() {
               <p className="mb-3 text-xs" style={{ color: 'var(--muted)' }}>
                 Tier I corpus vs. money contributed to date (you + employer).
               </p>
-              <CorpusChart result={result} theme={theme} />
+              <CorpusChart result={result} showFutureRupees={showFutureRupees} theme={theme} />
             </Card>
 
             <Card>
@@ -443,16 +488,16 @@ export function NpsPlanner() {
                 <dt style={{ color: 'var(--muted)' }}>Requested</dt>
                 <dd className="num text-right font-semibold">{pct(form.lumpSumWithdrawalPct, 0)}</dd>
                 <dt style={{ color: 'var(--muted)' }}>Lump sum taken</dt>
-                <dd className="num text-right font-semibold">{rupeeCompact(result.exit.lumpSumTakenInr)}</dd>
+                <dd className="num text-right font-semibold">{rupeeCompact(showFutureRupees ? result.exit.lumpSumTakenInr : result.exit.lumpSumTakenRealInr)}</dd>
                 <dt style={{ color: 'var(--muted)' }}>— tax-exempt (≤{pct(npsRules.exit.lumpSumTaxExemptFractionOfCorpus * 100, 0)} of corpus)</dt>
-                <dd className="num text-right font-semibold">{rupeeCompact(result.exit.lumpSumExemptInr)}</dd>
+                <dd className="num text-right font-semibold">{rupeeCompact(showFutureRupees ? result.exit.lumpSumExemptInr : result.exit.lumpSumExemptRealInr)}</dd>
                 <dt style={{ color: 'var(--muted)' }}>— potentially taxable</dt>
-                <dd className="num text-right font-semibold">{rupeeCompact(result.exit.lumpSumPotentiallyTaxableInr)}</dd>
+                <dd className="num text-right font-semibold">{rupeeCompact(showFutureRupees ? result.exit.lumpSumPotentiallyTaxableInr : result.exit.lumpSumPotentiallyTaxableRealInr)}</dd>
                 <dt className="col-span-2 my-1 h-px" style={{ background: 'var(--rule)' }} />
                 <dt style={{ color: 'var(--muted)' }}>Annuity purchase</dt>
-                <dd className="num text-right font-semibold">{rupeeCompact(result.exit.annuityPurchaseInr)}</dd>
+                <dd className="num text-right font-semibold">{rupeeCompact(showFutureRupees ? result.exit.annuityPurchaseInr : result.exit.annuityPurchaseRealInr)}</dd>
                 <dt style={{ color: 'var(--muted)' }}>Estimated monthly pension</dt>
-                <dd className="num text-right font-semibold">{rupee(result.exit.estimatedMonthlyPensionInr)}</dd>
+                <dd className="num text-right font-semibold">{rupee(showFutureRupees ? result.exit.estimatedMonthlyPensionInr : result.exit.estimatedMonthlyPensionRealInr)}</dd>
               </dl>
             </Card>
 
@@ -489,10 +534,10 @@ export function NpsPlanner() {
                       <tr key={y.year}>
                         <td className="border-b p-2" style={{ borderColor: 'var(--rule)' }}>{y.year}</td>
                         <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{y.age}</td>
-                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(y.employeeContributionThisYearInr)}</td>
-                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(y.employerContributionThisYearInr)}</td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(showFutureRupees ? y.employeeContributionThisYearInr : y.employeeContributionThisYearRealInr)}</td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(showFutureRupees ? y.employerContributionThisYearInr : y.employerContributionThisYearRealInr)}</td>
                         <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{pct(y.equitySharePct, 0)}</td>
-                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(y.corpusAtYearEndInr)}</td>
+                        <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{rupee(showFutureRupees ? y.corpusAtYearEndInr : y.corpusAtYearEndRealInr)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -504,6 +549,11 @@ export function NpsPlanner() {
               <h2 className="mb-2 text-[15px] font-semibold">Assumptions &amp; data</h2>
               <ul className="list-disc space-y-1.5 pl-5 text-xs" style={{ color: 'var(--ink2)' }}>
                 <li>Tier I only — Tier II (the voluntary, no-lock-in account) and partial withdrawals before exit are out of scope for this module.</li>
+                <li>
+                  Every figure can be shown in future (nominal) or today's (real) rupees via the toggle above — today's-money figures deflate by this year's own
+                  elapsed-inflation factor, resolved once per simulation year rather than per month (see <code>nps-simulator.ts</code>'s own doc comment); the shared
+                  inflation assumption is set in the Inflation section of the sidebar, same figure REIT income, SIP &amp; SWP, and EPF &amp; VPF use.
+                </li>
                 <li>
                   Auto Choice's lifecycle funds (LC75/LC50/LC25) glide equity down by age along PFRDA's published checkpoints; the non-equity remainder uses one blended "debt" return
                   (your Corporate Debt / Government Securities / Alternative assumptions, averaged) rather than a separately-sourced split for each lifecycle fund — that sub-split
