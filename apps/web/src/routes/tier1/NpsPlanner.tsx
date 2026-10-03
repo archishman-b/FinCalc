@@ -116,6 +116,8 @@ interface FormState {
   lumpSumWithdrawalPct: number;
   /** Old vs new income-tax regime — used only to pick which 80CCD figures to display below, not wired into any computed deduction. */
   taxRegime: 'old' | 'new';
+  /** Age until which the purchased annuity's pension is projected to be received, for the post-exit payout timeline below — a stand-in for life expectancy. */
+  planUntilAge: number;
 }
 
 function defaultFormState(): FormState {
@@ -136,6 +138,7 @@ function defaultFormState(): FormState {
     annuityRatePct: 6,
     lumpSumWithdrawalPct: 60,
     taxRegime: 'new',
+    planUntilAge: 85,
   };
 }
 
@@ -161,6 +164,7 @@ function toSimulatorInput(form: FormState, rules: NpsRules, inflationPct: number
     exitSlabs,
     lumpSumTaxExemptFractionOfCorpus: rules.exit.lumpSumTaxExemptFractionOfCorpus,
     inflationPct,
+    planUntilAge: form.planUntilAge,
   };
 }
 
@@ -207,6 +211,31 @@ function EquityGlideChart({ result, theme }: { result: NpsSimulationResult; them
           <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${Math.round(v)}%`} tick={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fill: colors.ink2 }} axisLine={false} tickLine={false} width={44} />
           <Tooltip formatter={(v) => [`${Number(v).toFixed(0)}%`, 'Equity share']} labelFormatter={(v) => `Year ${v}`} contentStyle={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, background: colors.paper, border: `1px solid ${colors.rule}`, borderRadius: 4 }} />
           <Line isAnimationActive={false} type="monotone" dataKey="equity" stroke={colors.accent} strokeWidth={2.25} dot={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function PensionPayoutChart({ result, showFutureRupees, theme }: { result: NpsSimulationResult; showFutureRupees: boolean; theme: GraphiteTheme }) {
+  const colors = graphiteChartColors(theme);
+  const data = result.payoutYearly.map((y) => ({
+    age: y.age,
+    cumulative: showFutureRupees ? y.cumulativePensionReceivedInr : y.cumulativePensionReceivedRealInr,
+  }));
+  return (
+    <div className="h-56 w-full" role="img" aria-label="Cumulative annuity pension received since exit, by age">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={colors.rule} vertical={false} />
+          <XAxis dataKey="age" tickFormatter={(v: number) => `Age ${v}`} tick={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fill: colors.ink2 }} axisLine={{ stroke: colors.rule }} tickLine={false} />
+          <YAxis tickFormatter={(v: number) => rupeeCompact(v)} tick={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fill: colors.ink2 }} axisLine={false} tickLine={false} width={64} />
+          <Tooltip
+            formatter={(v) => [rupeeCompact(Number(v)), 'Cumulative pension received']}
+            labelFormatter={(v) => `Age ${v}`}
+            contentStyle={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, background: colors.paper, border: `1px solid ${colors.rule}`, borderRadius: 4 }}
+          />
+          <Line isAnimationActive={false} type="monotone" dataKey="cumulative" name="cumulative" stroke={colors.accent} strokeWidth={2.5} dot={false} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -406,6 +435,15 @@ export function NpsPlanner() {
             <FieldRow label="Assumed annuity rate" hint="% a year, insurer-dependent">
               <Stepper value={form.annuityRatePct} onChange={(v) => update({ annuityRatePct: v })} step={0.25} min={0} max={12} suffix="%" />
             </FieldRow>
+            <SliderField
+              label="Plan pension until age"
+              hint="annuity payout horizon — a stand-in for life expectancy"
+              value={form.planUntilAge}
+              onChange={(v) => update({ planUntilAge: Math.round(v) })}
+              min={form.retirementAge}
+              max={100}
+              step={1}
+            />
 
             <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
               Tax benefits <span className="font-normal normal-case" style={{ color: 'var(--muted)' }}>· reference only</span>
@@ -502,6 +540,57 @@ export function NpsPlanner() {
             </Card>
 
             <Card>
+              <h2 className="mb-1 text-[15px] font-semibold">Annuity payout after exit</h2>
+              <p className="mb-3 text-xs" style={{ color: 'var(--muted)' }}>
+                {result.payoutYearsSimulated > 0 ? (
+                  <>
+                    A flat {rupee(showFutureRupees ? result.exit.estimatedMonthlyPensionInr : result.exit.estimatedMonthlyPensionRealInr)}/month annuity pension, received for{' '}
+                    {result.payoutYearsSimulated} {result.payoutYearsSimulated === 1 ? 'year' : 'years'} (through age {form.planUntilAge}), totals{' '}
+                    <strong style={{ color: 'var(--acctext)' }}>
+                      {rupeeCompact(showFutureRupees ? result.totalPensionReceivedInr : result.totalPensionReceivedRealInr)}
+                    </strong>{' '}
+                    — no cost-of-living escalation and no life-expectancy modelling beyond this one horizon you've chosen, and no joint-life or return-of-purchase-price annuity
+                    variant (see Assumptions).
+                  </>
+                ) : (
+                  'Set "Plan pension until age" above your retirement/exit age in the sidebar to see a year-by-year payout timeline.'
+                )}
+              </p>
+              {result.payoutYearsSimulated > 0 && (
+                <>
+                  <PensionPayoutChart result={result} showFutureRupees={showFutureRupees} theme={theme} />
+                  <div className="mt-3 max-h-64 overflow-auto rounded-md border" style={{ borderColor: 'var(--rule)' }}>
+                    <table className="w-full text-xs">
+                      <thead style={{ background: 'var(--panel)', position: 'sticky', top: 0 }}>
+                        <tr>
+                          {['Year', 'Age', 'Pension this year', 'Cumulative received'].map((h) => (
+                            <th key={h} className="border-b p-2 text-right first:text-left" style={{ borderColor: 'var(--rule)' }}>
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {result.payoutYearly.map((y) => (
+                          <tr key={y.year}>
+                            <td className="border-b p-2" style={{ borderColor: 'var(--rule)' }}>{y.year}</td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{y.age}</td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                              {rupee(showFutureRupees ? y.pensionReceivedThisYearInr : y.pensionReceivedThisYearRealInr)}
+                            </td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                              {rupee(showFutureRupees ? y.cumulativePensionReceivedInr : y.cumulativePensionReceivedRealInr)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </Card>
+
+            <Card>
               <h2 className="mb-2 text-[15px] font-semibold">Tax benefits (80CCD)</h2>
               <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
                 <dt style={{ color: 'var(--muted)' }}>Your contribution, 80CCD(1) — old regime only</dt>
@@ -566,6 +655,12 @@ export function NpsPlanner() {
                   pending clarification. See claude/pf-nps-research-and-plan.md for sourcing.
                 </li>
                 <li>The annuity estimate is a simple yield model (purchase price × assumed rate ÷ 12), matching the official NPS Trust calculator's own approach — not a specific insurer's annuity product, which varies by provider and annuity type.</li>
+                <li>
+                  The annuity payout timeline above simply extends that flat monthly pension forward through "Plan pension until age," with no cost-of-living escalation and no
+                  mortality/life-expectancy actuarial modelling, and no joint-life or return-of-purchase-price annuity variant — it's a horizon you choose, not an actuarial
+                  projection or a specific insurer's product. Real-terms figures there keep discounting past exit (continuing the same inflation factor rather than resetting it),
+                  unlike the cumulative contribution/corpus totals above.
+                </li>
                 <li>Return assumptions per asset class are illustrative starting points you're expected to edit, not sourced forecasts. EPFO interest crediting conventions don't apply here — NPS returns are market-linked.</li>
                 <li>Not modelled: partial withdrawals, Tier II, premature exit before the vesting period, and the ₹7.5L aggregate-employer-contribution ceiling across NPS + PF + superannuation.</li>
               </ul>

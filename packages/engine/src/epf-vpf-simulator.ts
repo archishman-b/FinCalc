@@ -95,6 +95,24 @@
  * wasn't independently confirmed against a primary source this session
  * (see `claude/pf-nps-research-and-plan.md`) — flagged as an approximate
  * estimate in the UI, not a precise EPFO-grade pension quote.
+ *
+ * **Post-retirement payout timeline (Phase 17).** EPF's own corpus (the
+ * `corpusAtRetirementInr` above) has no mandated annuitization — by law
+ * it's withdrawn as a lump sum, so there's nothing to simulate year-by-year
+ * on that side. The EPS side is different: it's a defined-benefit pension
+ * paid monthly for life, already fully determined by
+ * `epsMonthlyPensionEstimateInr` above, so `payoutYearly` below simply
+ * extends that flat monthly amount (× 12) forward from retirement through
+ * `planUntilAge`, with no COLA/escalation and no mortality or joint-life
+ * modelling — a single hand-picked horizon stands in for a real actuarial
+ * life-expectancy projection. Unlike the cumulative corpus/contribution
+ * totals above, this payout total has no sibling "stock" figure it must
+ * reconcile with — the pension is received and (presumably) spent, not
+ * re-invested into a balance this simulator tracks — so summing each
+ * payout year's OWN deflator (continuing to compound past the retirement
+ * horizon: `horizonDeflator × (1 + inflationRate)^k` for the k-th
+ * post-retirement year) is the correct real-terms total here, not a repeat
+ * of the bug described above.
  */
 
 export interface EpfVpfSimulatorInput {
@@ -125,6 +143,8 @@ export interface EpfVpfSimulatorInput {
   epsPensionableSalaryCeilingInr: number;
   /** Assumed annual inflation rate (%) used to express every nominal figure in today's money too — see this module's doc comment ("Nominal vs. real"). */
   inflationPct: number;
+  /** Age until which the EPS monthly pension is projected to be received, for the post-retirement payout timeline (`payoutYearly` below) — clamped to at least retirementAge; a stand-in for a real life-expectancy assumption. */
+  planUntilAge: number;
 }
 
 export interface EpfVpfYearRow {
@@ -152,6 +172,17 @@ export interface EpfVpfYearRow {
   contributedToDateRealInr: number;
 }
 
+/** One year of the post-retirement EPS pension payout timeline — see this module's doc comment ("Post-retirement payout timeline"). */
+export interface EpfVpfPensionPayoutYearRow {
+  /** Simulation year, continuing the numbering from `EpfVpfYearRow` (so year `yearsSimulated + 1` is the first payout year). */
+  year: number;
+  age: number;
+  pensionReceivedThisYearInr: number;
+  pensionReceivedThisYearRealInr: number;
+  cumulativePensionReceivedInr: number;
+  cumulativePensionReceivedRealInr: number;
+}
+
 export interface EpfVpfSimulationResult {
   yearly: readonly EpfVpfYearRow[];
   yearsSimulated: number;
@@ -176,6 +207,11 @@ export interface EpfVpfSimulationResult {
   epsMonthlyPensionEstimateRealInr: number;
   /** (1 + inflationPct/100)^yearsSimulated — divide any nominal horizon-end figure by this to get today's rupees. */
   inflationDeflatorAtHorizon: number;
+  /** Year-by-year EPS pension payout from retirement through `planUntilAge` — see this module's doc comment ("Post-retirement payout timeline"). Empty when `planUntilAge <= retirementAge`. */
+  payoutYearly: readonly EpfVpfPensionPayoutYearRow[];
+  payoutYearsSimulated: number;
+  totalPensionReceivedInr: number;
+  totalPensionReceivedRealInr: number;
 }
 
 function clampInt(value: number, min: number, max: number): number {
@@ -294,6 +330,31 @@ export function simulateEpfVpf(input: EpfVpfSimulatorInput): EpfVpfSimulationRes
   const pensionableServiceYears = Math.max(0, input.openingPensionableServiceYears) + years;
   const epsMonthlyPension = input.epsPensionDivisor > 0 ? (epsPensionableSalary * pensionableServiceYears) / input.epsPensionDivisor : 0;
 
+  // Post-retirement payout timeline (see doc comment): the flat monthly EPS
+  // pension extended year-by-year from retirement through planUntilAge. No
+  // sibling "stock" figure needs reconciling here, so each payout year's
+  // OWN deflator (continuing to compound past horizonDeflator) is the
+  // correct real-terms treatment — see the doc comment for why this is NOT
+  // a repeat of the bug the cumulative corpus/contribution totals had.
+  const payoutYears = clampInt(input.planUntilAge - input.retirementAge, 0, 60);
+  const epsAnnualPension = epsMonthlyPension * 12;
+  const payoutYearly: EpfVpfPensionPayoutYearRow[] = [];
+  let cumulativePensionReceived = 0;
+  let cumulativePensionReceivedReal = 0;
+  for (let k = 1; k <= payoutYears; k++) {
+    const payoutYearDeflator = horizonDeflator * Math.pow(1 + inflationRate, k);
+    cumulativePensionReceived += epsAnnualPension;
+    cumulativePensionReceivedReal += epsAnnualPension / payoutYearDeflator;
+    payoutYearly.push({
+      year: years + k,
+      age: input.retirementAge + k,
+      pensionReceivedThisYearInr: epsAnnualPension,
+      pensionReceivedThisYearRealInr: epsAnnualPension / payoutYearDeflator,
+      cumulativePensionReceivedInr: cumulativePensionReceived,
+      cumulativePensionReceivedRealInr: cumulativePensionReceivedReal,
+    });
+  }
+
   return {
     yearly,
     yearsSimulated: years,
@@ -315,5 +376,9 @@ export function simulateEpfVpf(input: EpfVpfSimulatorInput): EpfVpfSimulationRes
     epsMonthlyPensionEstimateInr: epsMonthlyPension,
     epsMonthlyPensionEstimateRealInr: epsMonthlyPension / horizonDeflator,
     inflationDeflatorAtHorizon: horizonDeflator,
+    payoutYearly,
+    payoutYearsSimulated: payoutYears,
+    totalPensionReceivedInr: cumulativePensionReceived,
+    totalPensionReceivedRealInr: cumulativePensionReceivedReal,
   };
 }

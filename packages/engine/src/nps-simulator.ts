@@ -62,6 +62,19 @@
  * `totalEmployerContributedRealInr` could overstate relative to
  * `corpusAtExitRealInr`, the same paradox found and fixed in the EPF/VPF
  * module.
+ *
+ * **Post-exit payout timeline (Phase 17).** `exit.estimatedMonthlyPensionInr`
+ * above is a flat yield-model estimate with no escalation; `payoutYearly`
+ * below simply extends that flat monthly pension (× 12) forward from exit
+ * through `planUntilAge` — same simplification (no COLA, no mortality or
+ * joint-life/return-of-purchase-price annuity modelling) as
+ * `epf-vpf-simulator.ts`'s own payout timeline, which this one mirrors
+ * exactly. And for the same reason given there: this payout total has no
+ * sibling "stock" figure to reconcile with (the pension is received, not
+ * re-invested into a tracked balance), so summing each payout year's OWN
+ * deflator — continuing to compound past `horizonDeflator` — is the
+ * correct real-terms total here, unlike the cumulative contribution/corpus
+ * totals above.
  */
 
 export type NpsAllocationMode = 'active' | 'auto';
@@ -129,6 +142,8 @@ export interface NpsSimulatorInput {
   lumpSumTaxExemptFractionOfCorpus: number;
   /** Assumed annual inflation rate (%) used to express every nominal figure in today's money too — see this module's doc comment ("Nominal vs. real"). */
   inflationPct: number;
+  /** Age until which the purchased annuity's monthly pension is projected to be received, for the post-exit payout timeline (`payoutYearly` below) — clamped to at least retirementAge; a stand-in for a real life-expectancy assumption. */
+  planUntilAge: number;
 }
 
 export interface NpsYearRow {
@@ -163,6 +178,17 @@ export interface NpsExitBreakdown {
   estimatedMonthlyPensionRealInr: number;
 }
 
+/** One year of the post-exit annuity payout timeline — see this module's doc comment ("Post-exit payout timeline"). */
+export interface NpsPensionPayoutYearRow {
+  /** Simulation year, continuing the numbering from `NpsYearRow` (so year `yearsSimulated + 1` is the first payout year). */
+  year: number;
+  age: number;
+  pensionReceivedThisYearInr: number;
+  pensionReceivedThisYearRealInr: number;
+  cumulativePensionReceivedInr: number;
+  cumulativePensionReceivedRealInr: number;
+}
+
 export interface NpsSimulationResult {
   yearly: readonly NpsYearRow[];
   yearsSimulated: number;
@@ -175,6 +201,11 @@ export interface NpsSimulationResult {
   /** (1 + inflationPct/100)^yearsSimulated — divide any nominal horizon-end figure by this to get today's rupees. */
   inflationDeflatorAtHorizon: number;
   exit: NpsExitBreakdown;
+  /** Year-by-year annuity pension payout from exit through `planUntilAge` — see this module's doc comment ("Post-exit payout timeline"). Empty when `planUntilAge <= retirementAge`. */
+  payoutYearly: readonly NpsPensionPayoutYearRow[];
+  payoutYearsSimulated: number;
+  totalPensionReceivedInr: number;
+  totalPensionReceivedRealInr: number;
 }
 
 function clampInt(value: number, min: number, max: number): number {
@@ -332,6 +363,30 @@ export function simulateNps(input: NpsSimulatorInput): NpsSimulationResult {
   const estimatedMonthlyPension = (annuityPurchase * (input.annuityRatePct / 100)) / 12;
   const horizonDeflator = Math.pow(1 + inflationRate, years);
 
+  // Post-exit payout timeline (see doc comment): the flat monthly annuity
+  // pension extended year-by-year from exit through planUntilAge. Same
+  // per-payout-year-own-deflator treatment as epf-vpf-simulator.ts's own
+  // payout timeline, for the same reason (no sibling stock to reconcile
+  // with).
+  const payoutYears = clampInt(input.planUntilAge - input.retirementAge, 0, 60);
+  const annualPension = estimatedMonthlyPension * 12;
+  const payoutYearly: NpsPensionPayoutYearRow[] = [];
+  let cumulativePensionReceived = 0;
+  let cumulativePensionReceivedReal = 0;
+  for (let k = 1; k <= payoutYears; k++) {
+    const payoutYearDeflator = horizonDeflator * Math.pow(1 + inflationRate, k);
+    cumulativePensionReceived += annualPension;
+    cumulativePensionReceivedReal += annualPension / payoutYearDeflator;
+    payoutYearly.push({
+      year: years + k,
+      age: input.retirementAge + k,
+      pensionReceivedThisYearInr: annualPension,
+      pensionReceivedThisYearRealInr: annualPension / payoutYearDeflator,
+      cumulativePensionReceivedInr: cumulativePensionReceived,
+      cumulativePensionReceivedRealInr: cumulativePensionReceivedReal,
+    });
+  }
+
   return {
     yearly,
     yearsSimulated: years,
@@ -357,5 +412,9 @@ export function simulateNps(input: NpsSimulatorInput): NpsSimulationResult {
       estimatedMonthlyPensionInr: estimatedMonthlyPension,
       estimatedMonthlyPensionRealInr: estimatedMonthlyPension / horizonDeflator,
     },
+    payoutYearly,
+    payoutYearsSimulated: payoutYears,
+    totalPensionReceivedInr: cumulativePensionReceived,
+    totalPensionReceivedRealInr: cumulativePensionReceivedReal,
   };
 }

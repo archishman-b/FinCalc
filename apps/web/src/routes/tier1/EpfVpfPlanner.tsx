@@ -72,6 +72,7 @@ function defaultFormState(): EpfFormState {
     taxableInterestThresholdPerYearInr: epf.taxableInterest.thresholdWithEmployerContributionInr,
     epsPensionDivisor: epf.eps.pensionDivisor,
     epsPensionableSalaryCeilingInr: epf.eps.pensionableSalaryCeilingInr,
+    planUntilAge: 85,
   };
 }
 
@@ -126,6 +127,31 @@ function ContributionMixChart({ result, showFutureRupees, theme }: { result: Epf
           <Bar isAnimationActive={false} dataKey="employee" name="employee" stackId="c" fill={colors.line2} fillOpacity={0.8} />
           <Bar isAnimationActive={false} dataKey="employerEpf" name="employerEpf" stackId="c" fill={colors.accent} fillOpacity={0.8} />
           <Bar isAnimationActive={false} dataKey="employerEps" name="employerEps" stackId="c" fill={colors.s3} fillOpacity={0.8} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function PensionPayoutChart({ result, showFutureRupees, theme }: { result: EpfVpfSimulationResult; showFutureRupees: boolean; theme: GraphiteTheme }) {
+  const colors = graphiteChartColors(theme);
+  const data = result.payoutYearly.map((y) => ({
+    age: y.age,
+    cumulative: showFutureRupees ? y.cumulativePensionReceivedInr : y.cumulativePensionReceivedRealInr,
+  }));
+  return (
+    <div className="h-56 w-full" role="img" aria-label="Cumulative EPS pension received since retirement, by age">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={colors.rule} vertical={false} />
+          <XAxis dataKey="age" tickFormatter={(v: number) => `Age ${v}`} tick={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fill: colors.ink2 }} axisLine={{ stroke: colors.rule }} tickLine={false} />
+          <YAxis tickFormatter={(v: number) => rupeeCompact(v)} tick={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, fill: colors.ink2 }} axisLine={false} tickLine={false} width={64} />
+          <Tooltip
+            formatter={(v) => [rupeeCompact(Number(v)), 'Cumulative pension received']}
+            labelFormatter={(v) => `Age ${v}`}
+            contentStyle={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, background: colors.paper, border: `1px solid ${colors.rule}`, borderRadius: 4 }}
+          />
+          <Line isAnimationActive={false} type="monotone" dataKey="cumulative" name="cumulative" stroke={colors.accent} strokeWidth={2.5} dot={false} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -205,6 +231,15 @@ export function EpfVpfPlanner() {
             </h2>
             <SliderField label="Current age" value={form.currentAge} onChange={(v) => update({ currentAge: Math.round(v) })} min={18} max={65} step={1} />
             <SliderField label="Retirement age" value={form.retirementAge} onChange={(v) => update({ retirementAge: Math.round(v) })} min={19} max={70} step={1} />
+            <SliderField
+              label="Plan pension until age"
+              hint="EPS pension payout horizon — a stand-in for life expectancy"
+              value={form.planUntilAge}
+              onChange={(v) => update({ planUntilAge: Math.round(v) })}
+              min={form.retirementAge}
+              max={100}
+              step={1}
+            />
 
             <h2 className="mb-2 mt-4 border-t pt-3 text-[10.5px] font-semibold uppercase tracking-widest" style={{ color: 'var(--acctext)', borderColor: 'var(--rule)' }}>
               Existing balance
@@ -359,6 +394,57 @@ export function EpfVpfPlanner() {
             </Card>
 
             <Card>
+              <h2 className="mb-1 text-[15px] font-semibold">Pension payout after retirement</h2>
+              <p className="mb-3 text-xs" style={{ color: 'var(--muted)' }}>
+                {result.payoutYearsSimulated > 0 ? (
+                  <>
+                    A flat {rupee(showFutureRupees ? result.epsMonthlyPensionEstimateInr : result.epsMonthlyPensionEstimateRealInr)}/month EPS pension, received for{' '}
+                    {result.payoutYearsSimulated} {result.payoutYearsSimulated === 1 ? 'year' : 'years'} (through age {form.planUntilAge}), totals{' '}
+                    <strong style={{ color: 'var(--acctext)' }}>
+                      {rupeeCompact(showFutureRupees ? result.totalPensionReceivedInr : result.totalPensionReceivedRealInr)}
+                    </strong>{' '}
+                    — no cost-of-living escalation and no life-expectancy modelling beyond this one horizon you've chosen. The EPF + VPF corpus itself has no mandated
+                    annuity; by law it's withdrawn separately as the lump sum shown above.
+                  </>
+                ) : (
+                  'Set "Plan pension until age" above your retirement age in the sidebar to see a year-by-year payout timeline.'
+                )}
+              </p>
+              {result.payoutYearsSimulated > 0 && (
+                <>
+                  <PensionPayoutChart result={result} showFutureRupees={showFutureRupees} theme={theme} />
+                  <div className="mt-3 max-h-64 overflow-auto rounded-md border" style={{ borderColor: 'var(--rule)' }}>
+                    <table className="w-full text-xs">
+                      <thead style={{ background: 'var(--panel)', position: 'sticky', top: 0 }}>
+                        <tr>
+                          {['Year', 'Age', 'Pension this year', 'Cumulative received'].map((h) => (
+                            <th key={h} className="border-b p-2 text-right first:text-left" style={{ borderColor: 'var(--rule)' }}>
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {result.payoutYearly.map((y) => (
+                          <tr key={y.year}>
+                            <td className="border-b p-2" style={{ borderColor: 'var(--rule)' }}>{y.year}</td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>{y.age}</td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                              {rupee(showFutureRupees ? y.pensionReceivedThisYearInr : y.pensionReceivedThisYearRealInr)}
+                            </td>
+                            <td className="border-b p-2 text-right num" style={{ borderColor: 'var(--rule)' }}>
+                              {rupee(showFutureRupees ? y.cumulativePensionReceivedInr : y.cumulativePensionReceivedRealInr)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </Card>
+
+            <Card>
               <h2 className="mb-2 text-[15px] font-semibold">Assumptions &amp; data</h2>
               <ul className="list-disc space-y-1.5 pl-5 text-xs" style={{ color: 'var(--ink2)' }}>
                 <li>
@@ -380,6 +466,11 @@ export function EpfVpfPlanner() {
                   The EPS pension estimate uses the textbook formula (pensionable salary × pensionable service ÷ divisor), with pensionable salary averaged over the last 5 years' wage,
                   capped at the pensionable-salary ceiling. It does not model the "weightage" rule (service beyond 20 years adds a bonus 2 years) — not independently confirmed against a
                   primary EPFO source this session — so treat it as an approximate estimate, not a precise EPFO-grade quote.
+                </li>
+                <li>
+                  The pension payout timeline above simply extends that flat monthly EPS pension forward through "Plan pension until age," with no cost-of-living escalation and no
+                  mortality/life-expectancy actuarial modelling — it's a horizon you choose, not an actuarial projection. Real-terms figures there keep discounting past retirement
+                  (continuing the same inflation factor rather than resetting it), unlike the cumulative corpus/contribution totals above.
                 </li>
                 <li>Not modelled: withdrawal TDS, partial/advance withdrawals, job changes and UAN transfers, and the ₹7.5L aggregate-employer-contribution ceiling across PF + NPS + superannuation.</li>
               </ul>

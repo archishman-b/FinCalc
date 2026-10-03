@@ -27,6 +27,7 @@ function baseInput(overrides: Partial<EpfVpfSimulatorInput> = {}): EpfVpfSimulat
     epsPensionDivisor: 70,
     epsPensionableSalaryCeilingInr: 25_000,
     inflationPct: 0,
+    planUntilAge: 85,
     ...overrides,
   };
 }
@@ -156,5 +157,45 @@ describe('simulateEpfVpf — edge cases', () => {
     // Some interest must now be attributed to the taxable bucket once contributions exceed the threshold.
     expect(result.totalTaxableInterestInr).toBeGreaterThan(0);
     expect(result.totalTaxableInterestInr).toBeLessThan(result.totalInterestEarnedInr);
+  });
+});
+
+describe('simulateEpfVpf — post-retirement EPS pension payout timeline (Phase 17)', () => {
+  it('produces an empty payout timeline when planUntilAge is at or before retirementAge', () => {
+    const result = simulateEpfVpf(baseInput({ retirementAge: 31, planUntilAge: 31 }));
+    expect(result.payoutYearsSimulated).toBe(0);
+    expect(result.payoutYearly).toHaveLength(0);
+    expect(result.totalPensionReceivedInr).toBe(0);
+    expect(result.totalPensionReceivedRealInr).toBe(0);
+  });
+
+  it('extends the flat EPS pension for exactly planUntilAge minus retirementAge years, nominal', () => {
+    const result = simulateEpfVpf(baseInput({ retirementAge: 35, planUntilAge: 40, inflationPct: 0 }));
+    expect(result.payoutYearsSimulated).toBe(5);
+    expect(result.payoutYearly).toHaveLength(5);
+    const epsAnnualPension = result.epsMonthlyPensionEstimateInr * 12;
+    expect(result.totalPensionReceivedInr).toBeCloseTo(epsAnnualPension * 5, 2);
+    const lastRow = result.payoutYearly[result.payoutYearly.length - 1];
+    expect(lastRow?.cumulativePensionReceivedInr).toBeCloseTo(result.totalPensionReceivedInr, 2);
+    expect(lastRow?.age).toBe(40);
+    // Zero inflation: every deflator is 1, so nominal and real coincide exactly.
+    expect(result.totalPensionReceivedRealInr).toBeCloseTo(result.totalPensionReceivedInr, 6);
+  });
+
+  it('discounts later payout years more than earlier ones in real terms once inflation is positive', () => {
+    const result = simulateEpfVpf(baseInput({ retirementAge: 35, planUntilAge: 45, inflationPct: 6 }));
+    expect(result.totalPensionReceivedRealInr).toBeLessThan(result.totalPensionReceivedInr);
+    const first = result.payoutYearly[0];
+    const last = result.payoutYearly[result.payoutYearly.length - 1];
+    // Flat nominal pension (no COLA) + a growing deflator => strictly declining real-terms value year over year.
+    expect(first?.pensionReceivedThisYearRealInr).toBeGreaterThan(last?.pensionReceivedThisYearRealInr ?? Infinity);
+  });
+
+  it('continues the per-year deflator past the retirement horizon rather than restarting it', () => {
+    const result = simulateEpfVpf(baseInput({ currentAge: 30, retirementAge: 35, planUntilAge: 36, inflationPct: 6 }));
+    const epsAnnualPension = result.epsMonthlyPensionEstimateInr * 12;
+    // k = 1: the first post-retirement year's deflator is horizonDeflator * (1 + inflationRate)^1, not a fresh (1+rate)^1.
+    const expectedDeflator = result.inflationDeflatorAtHorizon * 1.06;
+    expect(result.payoutYearly[0]?.pensionReceivedThisYearRealInr).toBeCloseTo(epsAnnualPension / expectedDeflator, 4);
   });
 });
